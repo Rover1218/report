@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Report Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding-top: 50px;
+        }
+
+        .container {
+            max-width: 800px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-label {
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: #4285F4;
+            border: none;
+            padding: 10px 20px;
+        }
+
+        .btn-primary:hover {
+            background-color: #3367D6;
+        }
+
+        h1 {
+            color: #4285F4;
+            margin-bottom: 30px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .alert {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="text-center">AI Report Generator</h1>
+        <p class="text-center mb-4">Generate professional reports or handwritten notes on any topic using Google's
+            Gemini AI</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'error' else 'danger' }}" role="alert">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form action="/generate" method="post" id="reportForm" target="_blank">
+            <div class="mb-3">
+                <label for="topic" class="form-label">Report Topic</label>
+                <input type="text" class="form-control" id="topic" name="topic" required
+                    placeholder="e.g., Climate Change Impact on Ocean Ecosystems">
+            </div>
+
+            <div class="mb-3">
+                <label for="pages" class="form-label">Number of Pages</label>
+                <input type="number" class="form-control" id="pages" name="pages" min="1" max="20" value="3" required>
+                <div class="form-text">Each page is approximately 500 words. We'll strictly adhere to your requested
+                    page count.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Report Type</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="type" id="typed" value="typed" checked>
+                    <label class="form-check-label" for="typed">
+                        Professionally Typed PDF
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="type" id="handwritten" value="handwritten">
+                    <label class="form-check-label" for="handwritten">
+                        Handwritten Style PDF
+                    </label>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary" id="generateBtn">Generate Report</button>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Generating your report... This may take a few minutes.</p>
+        </div>
+    </div>
+
+    <script>
+        // Form submission handling
+        document.getElementById('reportForm').addEventListener('submit', function (event) {
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('loading').style.display = 'block';
+
+            // Create a form data object from the form
+            const formData = new FormData(this);
+
+            // Open the form submission in a new window/tab for the download
+            const submitWindow = window.open('about:blank', '_blank');
+
+            // Reset the loading state immediately after window opens
+            setTimeout(function () {
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('loading').style.display = 'none';
+            }, 1000);
+
+            // Create a temporary form in the new window and submit it
+            const tempForm = submitWindow.document.createElement('form');
+            tempForm.action = '/generate';
+            tempForm.method = 'POST';
+
+            // Add the form data to the temporary form
+            for (const [key, value] of formData.entries()) {
+                const input = submitWindow.document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                tempForm.appendChild(input);
+            }
+
+            // Add the form to the document body and submit it
+            submitWindow.document.body.appendChild(tempForm);
+            tempForm.submit();
+
+            // Prevent the original form from submitting
+            event.preventDefault();
+        });
+    </script>
+
+    <script>
+        // If the page is loaded after a redirect (from error), reset loading state
+        window.onload = function () {
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('loading').style.display = 'none';
+        };
+    </script>
+</body>
+
+</html>
