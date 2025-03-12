@@ -37,17 +37,18 @@ def generate():
         num_pages = int(request.form['pages'])
         report_type = request.form['type']
         
-        # Generate content using Gemini
-        content = generate_report(topic, num_pages)
+        # Generate content using Gemini with different style based on report type
+        content = generate_report(topic, num_pages, is_handwritten=(report_type == 'handwritten'))
         
         # Add page request to content
         content['requested_pages'] = num_pages
         
-        # Create PDF based on type - removed handwriting sample code
+        # Removed handwriting sample upload handling
+        
+        # Create PDF based on type
         if report_type == 'typed':
             pdf_path = create_typed_pdf(topic, content)
         else:
-            # No handwriting sample needed
             pdf_path = create_handwritten_pdf(topic, content)
         
         # Send file as direct download
@@ -62,4 +63,22 @@ if __name__ == '__main__':
     # Create necessary directories
     os.makedirs('static/reports', exist_ok=True)
     os.makedirs('static/uploads', exist_ok=True)
+    
+    # Create fonts directory if it doesn't exist
+    os.makedirs('static/fonts', exist_ok=True)
+    
+    # Download a handwriting font if it doesn't exist
+    font_path = os.path.join('static', 'fonts', 'handwriting.ttf')
+    if not os.path.exists(font_path):
+        try:
+            import requests
+            # Using Google Font Homemade Apple as a nice handwriting font
+            font_url = "https://github.com/google/fonts/raw/main/apache/homemadeapple/HomemadeApple-Regular.ttf"
+            response = requests.get(font_url)
+            with open(font_path, 'wb') as f:
+                f.write(response.content)
+            print(f"Downloaded handwriting font to {font_path}")
+        except Exception as e:
+            print(f"Could not download font: {e}")
+    
     app.run(debug=True)

@@ -147,10 +147,8 @@ def create_typed_pdf(title, content):
         abstract = f"This report examines {title} and provides a comprehensive analysis of its key aspects."
     
     pdf.multi_cell(0, 7, abstract)  # Increased line spacing from 5 to 7
-    pdf.ln(2)  # Minimal space after abstract
+    pdf.ln(2)
     
-    # Second page - Table of Contents with centered styling
-    pdf.add_page()
     pdf.set_font("Times", 'B', 20)
     pdf.cell(0, 12, "Table of Contents", 0, 1, 'C')
     pdf.ln(6)  # More space after heading
@@ -207,8 +205,6 @@ def create_typed_pdf(title, content):
         max_chars = int(chars_per_page * content_pages * 0.15)
         if len(intro_text) > max_chars and max_chars > 0:
             intro_text = intro_text[:max_chars] + "..."
-        if len(intro_text) < chars_per_page * 0.5:  # If text is less than half page
-            center_text_on_page(pdf, intro_text)
         pdf.multi_cell(0, 7, intro_text)  # Increased line spacing from 5 to 7
     else:
         pdf.multi_cell(0, 7, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
@@ -454,7 +450,7 @@ def analyze_handwriting(image_path):
             "baseline_variation": random.uniform(0, 2),
         }
 
-def create_handwritten_pdf(title, content, handwriting_sample=None):
+def create_handwritten_pdf(title, content):
     """Create a PDF that simulates handwritten notes using styling."""
     output_path = os.path.join('static', 'reports', f"{title.replace(' ', '_')}_handwritten.pdf")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -470,8 +466,10 @@ def create_handwritten_pdf(title, content, handwriting_sample=None):
             elif isinstance(content[key], list):
                 content[key] = [sanitize_for_pdf(item) if isinstance(item, str) else item for item in content[key]]
     
-    # Analyze handwriting if a sample is provided
-    hw_style = analyze_handwriting(handwriting_sample)
+    # Define default values for handwritten rendering
+    words_per_page = 500
+    requested_pages = content.get('requested_pages', 3)
+    content_pages = max(requested_pages - 3, 1)
     
     class HandwrittenPDF(FPDF):
         # Create a custom PDF class that handles text wrapping and rotation
@@ -494,26 +492,32 @@ def create_handwritten_pdf(title, content, handwriting_sample=None):
             # Variation for more natural handwriting
             if not text or text.isspace():
                 return
-                
-            # Adjust size for this specific text
+
             current_size = self.font_size * size_factor
             self.set_font_size(current_size)
-            
-            # Ensure coordinates are within page bounds
-            x = max(10, min(x, self.w - 20))
-            y = max(10, min(y, self.h - 15))
-            
-            # Convert angle to radians
-            angle = angle * math.pi / 180
-            # Set rotation
-            self.rotate(angle, x, y)
-            # Print text
+
+            # Ensure x and y are within safe margins
+            safe_margin = 10
+            x = max(safe_margin, x)
+            y = max(safe_margin, y)
+
+            # Check text width and adjust x coordinate if necessary
+            text_width = self.get_string_width(text)
+            if x + text_width > self.w - safe_margin:
+                x = self.w - safe_margin - text_width
+            if y > self.h - safe_margin:
+                y = self.h - safe_margin
+
+            angle_rad = (angle * 0.3) * math.pi / 180  # Reduce angle swing
+            self.rotate(angle_rad, x, y)
             self.text(x, y, text)
-            # Reset rotation
             self.rotate(0)
-            
-            # Reset font size to default
+
+            # Reset font size to default value
             self.set_font_size(self.font_size / size_factor)
+            # Reduce random wobble to keep words on page
+            x_wobble = x + random.uniform(-0.2, 0.2)
+            y_wobble = y + random.uniform(-0.2, 0.2)
     
     # Get requested page count from content
     requested_pages = content.get('requested_pages', 3)  # Default to 3 if not specified
@@ -536,193 +540,51 @@ def create_handwritten_pdf(title, content, handwriting_sample=None):
         # Fallback to Courier
         pdf.set_font('Courier', '', 18)
     
-    # Abstract heading
-    pdf.set_font_size(16)  # Increased for more prominence
-    abstract_title = "Abstract"
-    abstract_x = pdf.w / 2 - pdf.get_string_width(abstract_title) / 2  # Center horizontally
-    y_pos = 25
-    pdf.set_xy(abstract_x, y_pos)
-    pdf.rotated_text(abstract_x, y_pos, abstract_title, random.uniform(-1, 1))
-    
-    # Create abstract from first part of introduction
     intro_text = sanitize_for_pdf(content.get('introduction', '').replace('\n', ' ').strip())
+    
+    # Define 'abstract' from intro_text
+    abstract = f"This report examines {title} and provides analysis of its key aspects."
     if intro_text:
-        abstract = ' '.join(intro_text.split()[:120])  # Increased from 75 to 120 words
+        abstract = ' '.join(intro_text.split()[:120])
         if len(intro_text.split()) > 120:
             abstract += "..."
-    else:
-        abstract = f"This report examines {title} and provides analysis of its key aspects."
     
-    # Write abstract with handwritten style
-    pdf.set_font_size(10)  # Even smaller font
-    words = abstract.split()
-    x_pos = 20
-    y_pos += 15
-    line_height = 15  # Increased line height from 12 to 15
-    max_width = pdf.w - 25
-    
-    # Calculate approximately how many pages we have for content sections
-    content_pages = max(requested_pages - 3, 1)
-    
-    # Approximate words per page based on our settings
-    words_per_page = 500  # Increased from 400 to fit more content
-    
-    # Write abstract with minimal spacing
-    for word in words:
-        word_width = pdf.get_string_width(word + " ")
-        
-        if x_pos + word_width > max_width:
-            x_pos = 20 + random.uniform(-2, 2)
-            y_pos += line_height + random.uniform(-0.5, 0.5)
-        
-        angle = random.uniform(-1, 1)  # Reduced angle
-        x_wobble = x_pos + random.uniform(-0.3, 0.3)  # Reduced wobble
-        y_wobble = y_pos + random.uniform(-0.3, 0.3)
-        
-        x_wobble = max(10, min(x_wobble, max_width - word_width))
-        y_wobble = max(10, min(y_wobble, pdf.h - 10))
-        
-        pdf.set_xy(x_wobble, y_wobble)
-        pdf.rotated_text(x_wobble, y_wobble, word, angle)
-        
-        x_pos += word_width + random.uniform(-0.1, 0.3)  # Tighter spacing
+    pdf.add_page()
+    pdf.set_y(20)
+    pdf.set_font_size(16)
+    pdf.cell(0, 10, "Abstract", 0, 1, 'C')
+    pdf.ln(5)
+    pdf.set_font_size(10)
+    pdf.multi_cell(0, 8, abstract)
     
     # Table of Contents (Second page)
     pdf.add_page()
-    pdf.set_font_size(14)
-    toc_x = 30 + random.uniform(-2, 2)
-    toc_y = 30 + random.uniform(-2, 2)
-    pdf.set_xy(toc_x, toc_y)
-    pdf.rotated_text(toc_x, toc_y, "Contents:", random.uniform(-1, 1))
-    
-    y_pos = 50
-    pdf.set_font_size(12)
-    
-    # Add Introduction to TOC
-    toc_item_x = 40 + random.uniform(-3, 3)
-    pdf.set_xy(toc_item_x, y_pos)
-    pdf.rotated_text(toc_item_x, y_pos, "Introduction", random.uniform(-1, 1))
-    y_pos += 15 + random.uniform(-2, 2)
-    
-    # Add Sections to TOC
+    pdf.set_font("Handwriting", '', 14)
+    pdf.cell(0, 10, "Contents:", 0, 1, 'L')
+ 
+    pdf.set_font("Handwriting", '', 12)
+    pdf.ln(5)
+    pdf.cell(0, 8, "Introduction", 0, 1, 'L')
     for section in content['sections']:
-        if y_pos > pdf.h - 30:  # Check if we need a new page
-            pdf.add_page()
-            y_pos = 30
-        
-        toc_item_x = 40 + random.uniform(-3, 3)
-        pdf.set_xy(toc_item_x, y_pos)
-        
-        # Truncate section title if needed
         section_title = sanitize_for_pdf(section['title'])
         if len(section_title) > 50:
             section_title = section_title[:47] + "..."
-            
-        pdf.rotated_text(toc_item_x, y_pos, section_title, random.uniform(-1, 1))
-        y_pos += 15 + random.uniform(-2, 2)
+        pdf.cell(0, 8, section_title, 0, 1, 'L')
+    pdf.cell(0, 8, "Conclusion", 0, 1, 'L')
+    pdf.cell(0, 8, "References", 0, 1, 'L')
     
-    # Add Conclusion & References to TOC
-    if y_pos > pdf.h - 30:
-        pdf.add_page()
-        y_pos = 30
-    
-    toc_item_x = 40 + random.uniform(-3, 3)
-    pdf.set_xy(toc_item_x, y_pos)
-    pdf.rotated_text(toc_item_x, y_pos, "Conclusion", random.uniform(-1, 1))
-    y_pos += 15 + random.uniform(-2, 2)
-    
-    if y_pos > pdf.h - 30:
-        pdf.add_page()
-        y_pos = 30
-    
-    toc_item_x = 40 + random.uniform(-3, 3)
-    pdf.set_xy(toc_item_x, y_pos)
-    pdf.rotated_text(toc_item_x, y_pos, "References", random.uniform(-1, 1))
-    
-    # Function to write handwritten section with centered heading
     def write_handwritten_section(title, content_text, is_main_section=False):
-        # Skip if title is empty
         if not title:
             return
-            
-        # Ensure content exists
-        if not content_text or content_text.isspace():
-            content_text = f"This section discusses important aspects related to {title}."
-            
         pdf.add_page()
-        pdf.set_font_size(18)  # Increased heading size
-        
-        # Center the title
-        title_x = pdf.w / 2 - pdf.get_string_width(title) / 2
-        title_y = 15 + random.uniform(-1, 1)
-        
-        pdf.set_xy(title_x, title_y)
-        title_angle = hw_style["slant"] * random.uniform(0.8, 1.2)
-        pdf.rotated_text(title_x, title_y, title, title_angle)
-        
-        pdf.set_font_size(16)  # Increased text size
-        
-        # If this is a main section, limit the content to balance across sections
-        if is_main_section and len(content.get('sections', [])) > 0:
-            section_count = len(content.get('sections', []))
-            words_per_section = int((words_per_page * content_pages * 0.7) / section_count)
-            words = content_text.replace('\n', ' ').strip().split()
-            if len(words) > words_per_section and words_per_section > 0:
-                words = words[:words_per_section] 
-                content_text = ' '.join(words) + "..."
-            else:
-                words = content_text.replace('\n', ' ').strip().split()
-        else:
-            words = content_text.replace('\n', ' ').strip().split()
-        
-        x_pos = 12  # Start closer to margin
-        y_pos = 30  # Start higher on page
-        line_height = 15  # Increased line height from 11 to 15
-        max_width = pdf.w - 20  # Use more of the page width
-        
-        # Determine if text is short and needs to be centered
-        text_length = len(content_text.split())
-        if text_length < 100:  # If short content
-            # Center the content on page
-            y_pos = pdf.h * 0.4  # Start at 40% of page height
-        
-        for word in words:
-            if not word.strip():
-                continue
-                
-            word_width = pdf.get_string_width(word + " ")
-            
-            if x_pos + word_width > max_width:
-                x_pos = 12 + random.uniform(-2, 2)
-                
-                # Vary the baseline for more natural handwriting
-                baseline_shift = hw_style["baseline_variation"] * random.uniform(-0.5, 0.5)
-                y_pos += line_height + baseline_shift
-            
-            if y_pos > pdf.h - 15:
-                pdf.add_page()
-                x_pos = 12 + random.uniform(-2, 2)
-                y_pos = 15  # Start at very top of page
-            
-            # Size variation for more natural look
-            size_variation = hw_style["size_variation"] * random.uniform(0.9, 1.1)
-            
-            # More natural angles based on handwriting style
-            angle = hw_style["slant"] * random.uniform(0.7, 1.3)
-            
-            # Increased natural variation
-            x_wobble = x_pos + random.uniform(-1.5, 1.5) * hw_style["spacing_variation"]
-            y_wobble = y_pos + random.uniform(-1.0, 1.0) * hw_style["baseline_variation"]
-            
-            x_wobble = max(10, min(x_wobble, max_width - word_width - 2))
-            y_wobble = max(10, min(y_wobble, pdf.h - 10))
-            
-            pdf.set_xy(x_wobble, y_wobble)
-            pdf.rotated_text(x_wobble, y_wobble, word, angle, size_variation)
-            
-            # Variable spacing between words for natural look
-            x_pos += word_width * hw_style["spacing_variation"] * random.uniform(0.85, 1.15)
-    
+        # Reset vertical position near top
+        pdf.set_y(20)
+        pdf.set_font("Handwriting", '', 18)
+        pdf.cell(0, 10, title, 0, 1, 'C')
+        pdf.ln(5)
+        pdf.set_font("Handwriting", '', 12)
+        pdf.multi_cell(0, 8, content_text)
+
     # Introduction - limit to 15% of content space
     intro_words = intro_text.split()
     intro_limit = int(words_per_page * content_pages * 0.15)
@@ -752,14 +614,10 @@ def create_handwritten_pdf(title, content, handwriting_sample=None):
     
     # References with tighter spacing
     pdf.add_page()
+    pdf.set_y(20)
     pdf.set_font_size(12)
-    
-    # Center the heading "References"
-    ref_title = "References:"
-    ref_x = pdf.w / 2 - pdf.get_string_width(ref_title) / 2
-    ref_y = 15
-    pdf.set_xy(ref_x, ref_y)
-    pdf.rotated_text(ref_x, ref_y, ref_title, random.uniform(-1, 1))
+    pdf.cell(0, 10, "References", 0, 1, 'C')
+    pdf.ln(3)
     
     pdf.set_font_size(10)  # Smaller font
     y_pos = 30
@@ -786,64 +644,22 @@ def create_handwritten_pdf(title, content, handwriting_sample=None):
     # Ensure all references are properly sanitized
     references = [sanitize_for_pdf(ref) for ref in references]
     
-    for ref_idx, ref in enumerate(references):
-        if not ref.strip():  # Skip empty references
-            continue
-            
-        # Number each reference for clarity
-        ref_text = f"{ref_idx+1}. {sanitize_for_pdf(ref.strip())}"
-            
-        # Split long references into chunks to ensure they fit
-        words = ref_text.split()
-        x_pos = 20
-        line_start = True
-        
-        for word in words:
-            word_width = pdf.get_string_width(word + " ")
-            
-            # Check if we need to move to next line
-            if (x_pos + word_width > max_width) and not line_start:
-                x_pos = 25  # Indent continuation lines
-                y_pos += 15 + random.uniform(-0.3, 0.3)  # Increased line height from 10 to 15
-                line_start = True
-            
-            # Check if we need a new page
-            if y_pos > pdf.h - 20:
-                pdf.add_page()
-                y_pos = 15  # Start higher
-                x_pos = 20
-                line_start = True
-            
-            # Controlled wobble and rotation
-            angle = random.uniform(-0.8, 0.8)  # Reduced angle
-            x_wobble = x_pos + random.uniform(-0.2, 0.2)  # Reduced wobble
-            y_wobble = y_pos + random.uniform(-0.2, 0.2)
-            
-            pdf.set_xy(x_wobble, y_wobble)
-            pdf.rotated_text(x_wobble, y_wobble, word, angle)
-            
-            x_pos += word_width + random.uniform(-0.1, 0.2)  # Tighter spacing
-            line_start = False
-        
-        # Space between references
-        y_pos += 15  # Increased line height from 12 to 15
-    
-    # Add thank you note after references - simplified
-    if y_pos > pdf.h - 40:  # If not enough space on current page
-        pdf.add_page()
-        y_pos = 50
-    else:
-        y_pos += 30
-    
+    for i, ref in enumerate(references, 1):
+        numbered_ref = f"{i}. {ref}"
+        pdf.multi_cell(0, 7, numbered_ref)
+        pdf.ln(2)
+
+    # Adjust the thank-you text positioning
+    pdf.ln(6)
     pdf.set_font_size(12)
-    thank_you_text = "Thank you"  # Simplified to just "Thank you"
-    thank_x = pdf.w / 2 - pdf.get_string_width(thank_you_text) / 2
-    pdf.set_xy(thank_x, y_pos)
-    pdf.rotated_text(thank_x, y_pos, thank_you_text, random.uniform(-1.5, 1.5))
+    pdf.cell(0, 10, "Thank you", 0, 1, 'C')
     
     # Make sure we finish exactly on target page count
     while pdf.current_page < pdf.target_pages:
         pdf.add_page()
+        pdf.set_font("Times", 'B', 14)
+        pdf.cell(0, 10, "End of Report", 0, 1, 'C')
+        pdf.ln(6)
     
     # Save the PDF
     pdf.output(output_path)

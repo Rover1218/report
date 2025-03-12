@@ -48,6 +48,18 @@
         .alert {
             margin-top: 20px;
         }
+
+        #handwritingSample {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .sample-preview {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
 </head>
 
@@ -67,7 +79,7 @@
         {% endif %}
         {% endwith %}
 
-        <form action="/generate" method="post" id="reportForm" target="_blank">
+        <form action="/generate" method="post" id="reportForm" target="_blank" enctype="multipart/form-data">
             <div class="mb-3">
                 <label for="topic" class="form-label">Report Topic</label>
                 <input type="text" class="form-control" id="topic" name="topic" required
@@ -95,6 +107,14 @@
                         Handwritten Style PDF
                     </label>
                 </div>
+
+                <div id="handwritingSample" class="mt-3">
+                    <label for="sample" class="form-label">Upload your handwriting sample:</label>
+                    <input type="file" class="form-control" id="sample" name="sample" accept="image/*">
+                    <div class="form-text">Upload a clear image of your handwritten text to mimic your writing style.
+                    </div>
+                    <img id="samplePreview" class="sample-preview" alt="Handwriting sample preview">
+                </div>
             </div>
 
             <div class="d-grid gap-2">
@@ -111,6 +131,32 @@
     </div>
 
     <script>
+        // Show/hide handwriting sample upload based on selected report type
+        document.getElementById('typed').addEventListener('change', function () {
+            document.getElementById('handwritingSample').style.display = 'none';
+        });
+
+        document.getElementById('handwritten').addEventListener('change', function () {
+            document.getElementById('handwritingSample').style.display = 'block';
+        });
+
+        // Preview uploaded handwriting sample
+        document.getElementById('sample').addEventListener('change', function (event) {
+            const preview = document.getElementById('samplePreview');
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            } else {
+                preview.style.display = 'none';
+            }
+        });
+
         // Form submission handling
         document.getElementById('reportForm').addEventListener('submit', function (event) {
             document.getElementById('generateBtn').disabled = true;

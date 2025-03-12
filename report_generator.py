@@ -11,13 +11,14 @@ def clean_json_string(json_str):
     json_str = re.sub(r'\\([^"])', r'\\\\\1', json_str)  # Fix single backslashes (not in quotes)
     return json_str
 
-def generate_report(topic, num_pages):
+def generate_report(topic, num_pages, is_handwritten=False):
     """
     Generate report content using Gemini API
     
     Args:
         topic (str): The topic of the report
         num_pages (int): Approximate number of pages to generate
+        is_handwritten (bool): Whether this is for a handwritten report
     
     Returns:
         dict: A structured report with title, introduction, sections, and conclusion
@@ -37,21 +38,25 @@ def generate_report(topic, num_pages):
     # Determine optimal section count based on page count
     section_count = min(5, max(3, num_pages))
     
+    # Adjust prompt based on whether it's for handwritten or typed format
+    writing_style = "casual, personal, and conversational" if is_handwritten else "formal, academic"
+    content_style = "bullet points, shorter paragraphs, and more direct language" if is_handwritten else "detailed paragraphs with academic depth"
+    
     # Create a more explicit prompt for valid JSON
     prompt = f"""
-    Your task is to create a detailed academic report on: "{topic}"
+    Your task is to create a {"personal, handwritten-style" if is_handwritten else "detailed academic"} report on: "{topic}"
 
     Requirements:
     - Content should fill {num_pages} pages (approximately {word_count} words total)
-    - Use formal, academic writing style with citations
+    - Use {writing_style} writing style with {"fewer" if is_handwritten else "academic"} citations
     - Include relevant examples and facts
     - Use only ASCII characters - DO NOT use special symbols or unicode characters
-    - INCLUDE AT LEAST 5 DETAILED ACADEMIC REFERENCES with proper citation format
+    - {"Use more personal language, first-person perspective where appropriate" if is_handwritten else "INCLUDE AT LEAST 5 DETAILED ACADEMIC REFERENCES with proper citation format"}
 
     Return ONLY a valid JSON object with this exact structure:
     {{
       "title": "{topic}",
-      "introduction": "A comprehensive introduction ({int(word_count * 0.15)} words)",
+      "introduction": "A {"brief, engaging" if is_handwritten else "comprehensive"} introduction ({int(word_count * 0.15)} words)",
       "sections": [
         {{
           "title": "Section 1",
@@ -66,7 +71,7 @@ def generate_report(topic, num_pages):
           "content": "Content for section 3"
         }}
       ],
-      "conclusion": "A thorough conclusion",
+      "conclusion": "A {"brief, personal" if is_handwritten else "thorough"} conclusion",
       "references": [
         "Author, A. (Year). Title of reference 1. Journal/Publisher, Vol(Issue), pages.",
         "Author, B. (Year). Title of reference 2. Journal/Publisher, Vol(Issue), pages.",
@@ -81,7 +86,7 @@ def generate_report(topic, num_pages):
     - Do NOT include explanatory text outside the JSON
     - Use plain ASCII characters only - NO unicode or special characters
     - NO comments in the JSON
-    - MAKE SURE TO INCLUDE ACTUAL REFERENCES RELATED TO THE TOPIC
+    - {"Use {content_style} (more suitable for handwritten notes)" if is_handwritten else "MAKE SURE TO INCLUDE ACTUAL REFERENCES RELATED TO THE TOPIC"}
     """
     
     try:
@@ -144,6 +149,9 @@ def generate_report(topic, num_pages):
                 f"Taylor, M. (2023). Practical applications of {topic}. Applied Research Today, 8(3), 67-89.",
                 f"White, S., & Miller, T. (2022). Future directions for {topic} research. Future Perspectives, 12(1), 34-56."
             ]
+        
+        # Add flag indicating if this is for handwritten format
+        report["is_handwritten"] = is_handwritten
         
         return report
         
