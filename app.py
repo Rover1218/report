@@ -85,33 +85,22 @@ if __name__ == '__main__':
     # Create necessary directories
     os.makedirs('static/reports', exist_ok=True)
     os.makedirs('static/uploads', exist_ok=True)
-    
-    # Create fonts directory if it doesn't exist
     os.makedirs('static/fonts', exist_ok=True)
     
-    # Download a handwriting font if it doesn't exist
-    font_path = os.path.join('static', 'fonts', 'hc.ttf')  # Changed from handwriting.ttf to hc.ttf for consistency
+    # Download font if it doesn't exist
+    font_path = os.path.join('static', 'fonts', 'hc.ttf')
     if not os.path.exists(font_path):
         try:
             import requests
-            # Using Google Font Homemade Apple as a nice handwriting font
             font_url = "https://github.com/google/fonts/raw/main/apache/homemadeapple/HomemadeApple-Regular.ttf"
-            response = requests.get(font_url, timeout=10)  # Added timeout
-            with open(font_path, 'wb') as f:
-                f.write(response.content)
-            print(f"Downloaded handwriting font to {font_path}")
+            response = requests.get(font_url, timeout=10)
+            if response.status_code == 200:
+                with open(font_path, 'wb') as f:
+                    f.write(response.content)
+                print(f"Downloaded handwriting font to {font_path}")
+            else:
+                print("Failed to download font, using fallback")
         except Exception as e:
             print(f"Could not download font: {e}")
-            # Create a simple fallback if download fails
-            try:
-                from fpdf import FPDF
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Courier", size=12)
-                pdf.cell(200, 10, txt="Fallback Font", ln=True)
-                pdf.output(font_path)
-                print("Created fallback font file")
-            except Exception as ef:
-                print(f"Could not create fallback font: {ef}")
     
     app.run(debug=True)
