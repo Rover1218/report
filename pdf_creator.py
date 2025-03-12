@@ -609,16 +609,27 @@ def create_handwritten_pdf(title, content):
     pdf.cell(0, 10, "Contents:", 0, 1, 'L')
     pdf.ln(5)
     
+    # Initialize page counter for TOC
+    current_page_counter = 3  # Start at page 3 (after abstract and TOC)
+    
     toc_items = []
-    toc_items.append(("Introduction", "3"))
+    toc_items.append(("Introduction", f"{current_page_counter}"))
+    current_page_counter += 1
+    
     for i, section in enumerate(content.get('sections', [])):
         title = sanitize_for_pdf(section.get('title', f"Section {i+1}"))
         # Truncate long titles
         if len(title) > 40:  # Shorter limit for handwritten style
             title = title[:37] + "..."
-        toc_items.append((title, f"{i+4}"))
-    toc_items.append(("Conclusion", f"{len(content.get('sections', [])) + 4}"))
-    toc_items.append(("References", f"{len(content.get('sections', [])) + 5}"))
+        toc_items.append((title, f"{current_page_counter}"))
+        current_page_counter += 1
+        
+    conclusion_page = current_page_counter
+    toc_items.append(("Conclusion", f"{conclusion_page}"))
+    current_page_counter += 1
+    
+    references_page = current_page_counter
+    toc_items.append(("References", f"{references_page}"))
     
     # Dynamically calculate left width based on page width
     left_width = pdf.w - 40  # Reduced from fixed 120 to dynamic width with margin
@@ -715,8 +726,8 @@ def create_handwritten_pdf(title, content):
     remaining_pages = max(2, pdf.target_pages - pdf.current_page - 2)  # Reserve 2 pages for conclusion and references
     section_pages = min(len(content.get('sections', [])), remaining_pages)
     
-    # Sections with more content - limited to fit within page limit
-    for section in content.get('sections', [])[:section_pages]:
+    # Process ALL sections - don't limit by section_pages
+    for section in content.get('sections', []):
         section_content = sanitize_for_pdf(section.get('content', ''))
         section_content = re.sub(r'\\n\\n', ' ', section_content)
         section_content = re.sub(r'\\n', ' ', section_content)
@@ -794,13 +805,13 @@ def create_handwritten_pdf(title, content):
             pdf.multi_cell(0, 10, f"I think the most interesting aspect of {title} might be how it connects to other areas. Nothing exists in isolation - everything is connected in some way.")
     
     # Now add the conclusion and references exactly once
-    # Conclusion Page
+    # Conclusion Page - should be on the exact page promised in TOC
     conclusion_text = sanitize_for_pdf(content.get('conclusion', '').strip()) or f"In conclusion, {title} represents an important area of study."
     conclusion_text = re.sub(r'\\n\\n', ' ', conclusion_text)
     conclusion_text = re.sub(r'\\n', ' ', conclusion_text)
     write_handwritten_section("Conclusion:", conclusion_text)
     
-    # References Page (only once) - start on new page with consistent spacing
+    # References Page - should be on the exact page promised in TOC
     pdf.add_page()
     pdf.set_y(25)  # Increased from 20 to 25
     pdf.set_font("Handwriting", '', 16)  # Increased from 12 to 16
