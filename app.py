@@ -24,12 +24,19 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 def index():
     return render_template('index.html')
 
+@app.route('/error')
+def error():
+    return render_template('error.html')
+
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
         topic = request.form['topic']
         num_pages = int(request.form['pages'])
         report_type = request.form['type']
+        
+        # Limit pages to a reasonable number for Vercel deployment
+        num_pages = min(num_pages, 10)  # Cap at 10 pages to prevent timeouts
         
         # Generate the report content
         content = generate_report(topic, num_pages, is_handwritten=(report_type == 'handwritten'))
@@ -72,17 +79,28 @@ if __name__ == '__main__':
     os.makedirs('static/fonts', exist_ok=True)
     
     # Download a handwriting font if it doesn't exist
-    font_path = os.path.join('static', 'fonts', 'handwriting.ttf')
+    font_path = os.path.join('static', 'fonts', 'hc.ttf')  # Changed from handwriting.ttf to hc.ttf for consistency
     if not os.path.exists(font_path):
         try:
             import requests
             # Using Google Font Homemade Apple as a nice handwriting font
             font_url = "https://github.com/google/fonts/raw/main/apache/homemadeapple/HomemadeApple-Regular.ttf"
-            response = requests.get(font_url)
+            response = requests.get(font_url, timeout=10)  # Added timeout
             with open(font_path, 'wb') as f:
                 f.write(response.content)
             print(f"Downloaded handwriting font to {font_path}")
         except Exception as e:
             print(f"Could not download font: {e}")
+            # Create a simple fallback if download fails
+            try:
+                from fpdf import FPDF
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Courier", size=12)
+                pdf.cell(200, 10, txt="Fallback Font", ln=True)
+                pdf.output(font_path)
+                print("Created fallback font file")
+            except Exception as ef:
+                print(f"Could not create fallback font: {ef}")
     
     app.run(debug=True)

@@ -587,7 +587,6 @@ def create_handwritten_pdf(title, content):
     else:
         abstract += f"What really stood out to me was how this topic connects to so many different fields and real-world situations. "
     
-    # Add personal motivation
     abstract += f"I wanted to explore different perspectives and put together something that might help others get a better handle on the main ideas. "
     
     # Add purpose statement different from introduction
@@ -595,17 +594,42 @@ def create_handwritten_pdf(title, content):
     
     pdf.add_page()
     pdf.set_y(20)
-    # Replace direct font_size(16) with Handwriting 22:
-    pdf.set_font("Handwriting", '', 22)
+    
+    # Improved font handling with better error recovery
+    try:
+        # First try the handwriting font
+        pdf.set_font("Handwriting", '', 22)
+    except Exception as e:
+        print(f"Warning: Could not use Handwriting font: {e}")
+        try:
+            # Try to add the font again if it failed the first time
+            pdf.add_font('Handwriting', '', os.path.join('static', 'fonts', 'hc.ttf'), uni=True)
+            pdf.set_font('Handwriting', '', 22)
+        except Exception as e2:
+            print(f"Error loading handwriting font: {e2}")
+            # Fall back to a standard font that's guaranteed to work
+            pdf.set_font('Courier', '', 16)
+    
     pdf.cell(0, 10, "Abstract", 0, 1, 'C')
     pdf.ln(5)
-    # Replace direct font_size(10) with Handwriting 14:
-    pdf.set_font("Handwriting", '', 14)
+    
+    # Again use safe font selection
+    try:
+        pdf.set_font("Handwriting", '', 14)
+    except Exception:
+        pdf.set_font('Courier', '', 12)
+    
     pdf.multi_cell(0, 10, abstract)  # changed line height from 8 to 10
     
     # Table of Contents (Second page) - modified for handwritten PDF
     pdf.add_page()
-    pdf.set_font("Handwriting", '', 14)
+    
+    # Use safe font selection
+    try:
+        pdf.set_font("Handwriting", '', 14)
+    except Exception:
+        pdf.set_font('Courier', '', 12)
+    
     pdf.cell(0, 10, "Contents:", 0, 1, 'L')
     pdf.ln(5)
     
