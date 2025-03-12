@@ -116,8 +116,8 @@ def create_typed_pdf(title, content):
     requested_pages = content.get('requested_pages', 3)  # Default to 3 if not specified
     
     pdf = PageLimitPDF(target_pages=requested_pages)
-    # Fix margins in each page
-    pdf.set_margins(20, 20, 20)
+    # Fix margins in each page - increase side margins for better heading containment
+    pdf.set_margins(25, 20, 25)  # Increased side margins from 20 to 25
     pdf.set_auto_page_break(True, margin=20)
     
     # First page - Start directly with Abstract (no title)
@@ -136,14 +136,21 @@ def create_typed_pdf(title, content):
     
     pdf.set_font("Times", '', 18)
     
-    # Create abstract from the first part of the introduction
+    # Create abstract as a condensed version of the introduction (not the full text)
     intro_text = sanitize_for_pdf(str(content.get('introduction', '')))
     if intro_text:
-        abstract = ' '.join(intro_text.split()[:120])
+        # Use only first 1-2 sentences for abstract (roughly 30% of intro)
+        words = intro_text.split()
+        abstract_word_count = min(len(words) // 3, 100)  # Take ~1/3 of intro or 100 words max
+        abstract = ' '.join(words[:abstract_word_count])
+        
+        # Add ellipsis if we truncated
+        if abstract_word_count < len(words):
+            abstract += '...'
     else:
         abstract = f"This report examines {title} and provides a comprehensive analysis of its key aspects."
     
-    pdf.multi_cell(0, 7, abstract)  # Increased line spacing from 5 to 7
+    pdf.multi_cell(0, 9, abstract)  # Increased line spacing from 7 to 9
     pdf.ln(2)
     
     # Move Table of Contents to a new page
@@ -167,15 +174,30 @@ def create_typed_pdf(title, content):
     for i, section in enumerate(sections):
         section_title = sanitize_for_pdf(str(section.get('title', f"Section {i+1}")))
         # If section title is too long, truncate it for TOC
-        if len(section_title) > 70:
-            section_title = section_title[:67] + "..."
-        pdf.cell(0, 5, f"{section_title} .......... {i+3}", 0, 1)
+        if len(section_title) > 50:  # Reduced from 70 to 50 for better spacing
+            section_title = section_title[:47] + "..."
+            
+        # Calculate available width for dots
+        title_width = pdf.get_string_width(section_title)
+        page_num = f"{i+3}"
+        page_num_width = pdf.get_string_width(page_num)
+        available_width = pdf.w - 40 - title_width - page_num_width  # 40 is margin
+        
+        # Calculate number of dots that will fit
+        dot_width = pdf.get_string_width(".")
+        num_dots = max(1, int(available_width / dot_width))
+        dots = "." * num_dots
+        
+        # Print with calculated dots
+        pdf.cell(title_width, 5, section_title, 0, 0)
+        pdf.cell(available_width, 5, dots, 0, 0)
+        pdf.cell(page_num_width, 5, page_num, 0, 1, 'R')
     
     # Add Conclusion and References to TOC
     pdf.cell(0, 5, f"Conclusion .......... {len(sections)+3}", 0, 1)
     pdf.cell(0, 5, f"References .......... {len(sections)+4}", 0, 1)
     
-    # Introduction with centered heading
+    # Always force Introduction to start on a new page
     pdf.add_page()
     pdf.set_font("Times", 'B', 18)
     pdf.cell(0, 8, "Introduction", 0, 1, 'C')  # Changed from default to 'C' to center
@@ -200,106 +222,143 @@ def create_typed_pdf(title, content):
         # Remove \n\n that might exist in the text 
         intro_text = re.sub(r'\\n\\n', ' ', intro_text)
         intro_text = re.sub(r'\\n', ' ', intro_text)
-        pdf.multi_cell(0, 7, intro_text)  # Increased line spacing from 5 to 7
+        pdf.multi_cell(0, 9, intro_text)  # Increased line spacing from 7 to 9
     else:
-        pdf.multi_cell(0, 7, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
+        pdf.multi_cell(0, 9, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
     
     pdf.ln(2)
     
-    # Sections with centered headings
-    if sections:
-        chars_per_section = int((chars_per_page * content_pages * 0.7) / len(sections))
+    # Sections with centered headings - replace generic section titles
+    if not content.get('sections'):
+        # Create more meaningful section titles based on topic
+        section_count = max(3, min(5, requested_pages // 2))
+        meaningful_titles = [
+            f"Background and Context of {title}",
+            f"Key Concepts in {title}",
+            f"Analysis of {title}",
+            f"Applications and Implications of {title}",
+            f"Future Directions in {title} Research"
+        ]
         
-        for section in sections:
-            pdf.add_page()
-            # Enhanced section title styling
-            pdf.set_font("Times", 'B', 18)
-            
-            # Ensure section title exists
-            section_title = sanitize_for_pdf(str(section.get('title', 'Untitled Section')))
-            
-            # Handle long section titles by wrapping
-            if pdf.get_string_width(section_title) > (pdf.w - 20):
-                # Split section title into multiple lines if needed
-                words = section_title.split()
-                line = ""
-                for word in words:
-                    test_line = line + " " + word if line else word
-                    if pdf.get_string_width(test_line) < (pdf.w - 20):
-                        line = test_line
-                    else:
-                        pdf.cell(0, 6, line, 0, 1, 'C')  # Center each line
-                        line = word
-                if line:
-                    pdf.cell(0, 6, line, 0, 1, 'C')  # Center the last line
-            else:
-                pdf.cell(0, 6, section_title, 0, 1, 'C')  # Center the section title
-            
-            # Add more space before underline
-            pdf.ln(3)  # Add extra space before underline
-            
-            # Add a decorative line under section heading
-            pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)  # Changed from 10 to 30 for consistent styling
-            pdf.ln(6)
-            
-            pdf.set_font("Times", '', 18)  # Increased from 12 to 18
-            
-            # Ensure section content exists and fits properly
-            section_text = sanitize_for_pdf(str(section.get('content', '')).replace('\n', ' ').strip())
-            # Remove \n\n that might exist in the text
-            section_text = re.sub(r'\\n\\n', ' ', section_text)
-            section_text = re.sub(r'\\n', ' ', section_text)
-            
-            if section_text:
-                # Center text if it's a short section
-                if len(section_text) < chars_per_section * 0.5:
-                    center_text_on_page(pdf, section_text)
-                pdf.multi_cell(0, 9, section_text)  # Increased line spacing from 7 to 9
-            else:
-                pdf.multi_cell(0, 7, f"This section discusses important aspects related to {section_title}.")
-                
-            pdf.ln(2)
+        content["sections"] = [
+            {
+                "title": meaningful_titles[i % len(meaningful_titles)],
+                "content": f"Detailed analysis on {title} with comprehensive discussion and examples."
+            } for i in range(section_count)
+        ]
     
-    # Conclusion with centered heading
+    # Track remaining pages to ensure conclusion and references fit
+    remaining_pages = max(2, pdf.target_pages - pdf.current_page - 2)  # Reserve 2 pages for conclusion and references
+    section_pages = min(len(content.get('sections', [])), remaining_pages)
+    
+    # Define approximate characters per section based on total characters and number of sections
+    sections_count = len(content.get('sections', [])) or 1
+    chars_per_section = int((chars_per_page * content_pages * 0.7) / sections_count)
+    
+    # Process sections
+    for i, section in enumerate(content.get('sections', [])[:section_pages]):
+        pdf.add_page()
+        # Enhanced section title styling
+        pdf.set_font("Times", 'B', 18)
+        
+        # Ensure section title exists
+        section_title = sanitize_for_pdf(str(section.get('title', 'Untitled Section')))
+        
+        # Handle long section titles by wrapping - use more conservative width limit
+        if pdf.get_string_width(section_title) > (pdf.w - 60):  # More conservative width check
+            # Split section title into multiple lines if needed
+            words = section_title.split()
+            line = ""
+            for word in words:
+                test_line = line + " " + word if line else word
+                if pdf.get_string_width(test_line) < (pdf.w - 60):  # More conservative width limit
+                    line = test_line
+                else:
+                    pdf.cell(0, 6, line, 0, 1, 'C')  # Center each line
+                    line = word
+            if line:
+                pdf.cell(0, 6, line, 0, 1, 'C')  # Center the last line
+        else:
+            pdf.cell(0, 6, section_title, 0, 1, 'C')  # Center the section title
+        
+        # Add more space before underline
+        pdf.ln(3)  # Add extra space before underline
+        
+        # Add a decorative line under section heading
+        pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)  # Changed from 10 to 30 for consistent styling
+        pdf.ln(6)
+        
+        pdf.set_font("Times", '', 18)  # Increased from 12 to 18
+        
+        # Ensure section content exists and fits properly
+        section_text = sanitize_for_pdf(str(section.get('content', '')).replace('\n', ' ').strip())
+        # Remove \n\n that might exist in the text
+        section_text = re.sub(r'\\n\\n', ' ', section_text)
+        section_text = re.sub(r'\\n', ' ', section_text)
+        
+        if section_text:
+            # Center text if it's a short section
+            if len(section_text) < chars_per_section * 0.5:
+                center_text_on_page(pdf, section_text)
+            pdf.multi_cell(0, 9, section_text)  # Increased line spacing from 7 to 9
+        else:
+            pdf.multi_cell(0, 7, f"This section discusses important aspects related to {section_title}.")
+                
+        pdf.ln(2)
+    
+    # Ensure conclusion and references always appear, regardless of page countpages are added before them
+    reserved_pages = 2  # Reserve 2 pages for Conclusion and References
+
+    # Add dynamic additional insight pages until current page equals (target_pages - reserved_pages)
+    while pdf.current_page < (pdf.target_pages - reserved_pages):
+        pdf.add_page()
+        pdf.set_font("Times", 'B', 14)
+        extra_page_number = pdf.current_page
+        headings = [
+            f"Additional Insights - Page {extra_page_number}",
+            f"Further Analysis - {title}",
+            f"Extended Discussion - Key Concepts",
+            f"Supplementary Information",
+            f"Advanced Topics - {title}"
+        ]
+        heading_index = extra_page_number % len(headings)
+        pdf.cell(0, 10, headings[heading_index], 0, 1, 'C')
+        pdf.ln(6)
+        pdf.set_font("Times", '', 12)
+        extra_contents = [
+            f"This section explores additional theoretical frameworks related to {title}. Understanding these frameworks provides deeper insight into the subject matter.",
+            f"Building on the core concepts, this analysis offers alternative perspectives on {title}.",
+            f"The practical implementations of {title} span multiple domains. Case studies illustrate these concepts in action.",
+            f"Examining the historical evolution of {title} reveals important patterns and trends.",
+            f"Future research directions for {title} include promising avenues that could substantially advance understanding."
+        ]
+        content_index = (extra_page_number + 2) % len(extra_contents)
+        pdf.multi_cell(0, 7, extra_contents[content_index])
+        pdf.ln(5)
+    
+    # Now add the final reserved pages
+    # Conclusion Page
     pdf.add_page()
     pdf.set_font("Times", 'B', 18)
-    pdf.cell(0, 8, "Conclusion", 0, 1, 'C')  # Changed to 'C' to center
-    
-    # Add more space before underline
-    pdf.ln(3)  # Add extra space before the underline
-    
-    # Add a decorative line under conclusion heading
-    pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)  # Changed from 10 to 30
+    pdf.cell(0, 8, "Conclusion", 0, 1, 'C')
+    pdf.ln(3)
+    pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)
     pdf.ln(6)
-    
-    pdf.set_font("Times", '', 18)  # Increased from 12 to 18
-    
-    # Check if conclusion exists and has content
+    pdf.set_font("Times", '', 18)
     conclusion_text = sanitize_for_pdf(str(content.get('conclusion', '')).replace('\n', ' ').strip())
-    # Remove \n\n that might exist in the text
-    conclusion_text = re.sub(r'\\n\\n', ' ', conclusion_text)
-    conclusion_text = re.sub(r'\\n', ' ', conclusion_text)
-    
     if not conclusion_text:
-        conclusion_text = f"In conclusion, {title} represents an important area of study. This report has highlighted key aspects and considerations related to the topic."
-    
-    # Print conclusion with proper word wrapping
-    pdf.multi_cell(0, 7, conclusion_text)  # Increased line spacing
+        conclusion_text = f"In conclusion, {title} represents an important area of study."
+    pdf.multi_cell(0, 9, conclusion_text)
     pdf.ln(2)
     
-    # References with centered heading
+    # References Page
     pdf.add_page()
     pdf.set_font("Times", 'B', 18)
-    pdf.cell(0, 8, "References", 0, 1, 'C')  # Changed to 'C' to center
-    
-    # Add more space before underline
-    pdf.ln(3)  # Add extra space before the underline
-    
-    # Add a decorative line under references heading
-    pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)  # Changed from 10 to 30
+    pdf.cell(0, 8, "References", 0, 1, 'C')
+    pdf.ln(3)
+    pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)
     pdf.ln(6)
-    
-    pdf.set_font("Times", '', 16)  # Increased from 12 to 16
+    pdf.set_font("Times", '', 16)
     
     # Fix references extraction and handling
     refs = []
@@ -358,32 +417,6 @@ def create_typed_pdf(title, content):
     pdf.ln(10)  # Space after references
     pdf.set_font("Times", 'I', 14)
     pdf.cell(0, 10, "Thank you", 0, 1, 'C')  # Simplified to just "Thank you"
-    
-    # Make sure we finish exactly on target page count with meaningful content
-    while pdf.current_page < pdf.target_pages:
-        pdf.add_page()
-        pdf.set_font("Times", 'B', 14)
-        pdf.cell(0, 10, "Additional Notes", 0, 1, 'C')
-        # Add a decorative line under heading
-        pdf.line(40, pdf.get_y(), pdf.w-40, pdf.get_y())
-        pdf.ln(6)
-        
-        pdf.set_font("Times", '', 12)
-        
-        # Add more meaningful content to fill pages
-        notes = [
-            f"This section contains supplementary information related to {title}.",
-            f"Key points to consider when studying {title}:",
-            "• The historical context and development of this subject",
-            "• Current research trends and methodologies",
-            "• Practical applications and implications",
-            "• Challenges and opportunities for future research",
-            f"For a more comprehensive understanding of {title}, readers are encouraged to explore the references provided in this report and conduct further research on specific aspects of interest."
-        ]
-        
-        for note in notes:
-            pdf.multi_cell(0, 7, note)
-            pdf.ln(5)
     
     # Save the PDF
     pdf.output(output_path)
@@ -511,9 +544,9 @@ def create_handwritten_pdf(title, content):
     
     pdf = HandwrittenPDF(target_pages=requested_pages)
     
-    # Fix margins on every page:
-    pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(True, margin=5)
+    # Fix margins on every page - increase margins for better heading containment
+    pdf.set_margins(15, 15, 15)  # Increased from 10,10,10 to 15,15,15
+    pdf.set_auto_page_break(True, margin=10)  # Increased from 5 to 10
     
     # Use hc.ttf font for handwritten text instead of trying different fonts
     try:
@@ -524,12 +557,23 @@ def create_handwritten_pdf(title, content):
         # Fallback to Courier
         pdf.set_font('Courier', '', 22)
     
+    # Clean intro text to remove newlines
     intro_text = sanitize_for_pdf(content.get('introduction', '').replace('\n', ' ').strip())
+    intro_text = re.sub(r'\\n\\n', ' ', intro_text)
+    intro_text = re.sub(r'\\n', ' ', intro_text)
     
-    # Define 'abstract' from intro_text
-    abstract = f"This report examines {title} and provides analysis of its key aspects."
+    # Create a condensed abstract from the introduction
     if intro_text:
-        abstract = intro_text
+        # Use only first 1-3 sentences for abstract (roughly 30% of intro)
+        words = intro_text.split()
+        abstract_word_count = min(len(words) // 3, 80)  # Take ~1/3 of intro or 80 words max for handwritten
+        abstract = ' '.join(words[:abstract_word_count])
+        
+        # Add ellipsis if we truncated
+        if abstract_word_count < len(words):
+            abstract += '...'
+    else:
+        abstract = f"This report examines {title} and provides analysis of its key aspects."
     
     pdf.add_page()
     pdf.set_y(20)
@@ -539,87 +583,202 @@ def create_handwritten_pdf(title, content):
     pdf.ln(5)
     # Replace direct font_size(10) with Handwriting 14:
     pdf.set_font("Handwriting", '', 14)
-    pdf.multi_cell(0, 8, abstract)
+    pdf.multi_cell(0, 10, abstract)  # changed line height from 8 to 10
     
-    # Table of Contents (Second page)
+    # Table of Contents (Second page) - modified for handwritten PDF
     pdf.add_page()
     pdf.set_font("Handwriting", '', 14)
     pdf.cell(0, 10, "Contents:", 0, 1, 'L')
- 
-    pdf.set_font("Handwriting", '', 14)
     pdf.ln(5)
-
-    # Introduction:
-    pdf.cell(100, 8, "Introduction", 0, 0, 'L')
-    pdf.cell(0, 8, "3", 0, 1, 'R')
-
-    # Sections:
-    for i, section in enumerate(content['sections']):
-        section_title = sanitize_for_pdf(section['title'])
-        pdf.cell(100, 8, section_title, 0, 0, 'L')
-        pdf.cell(0, 8, f"{i+4}", 0, 1, 'R')
-
-    # Conclusion:
-    pdf.cell(100, 8, "Conclusion", 0, 0, 'L')
-    pdf.cell(0, 8, str(len(content['sections']) + 4), 0, 1, 'R')
-
-    # References:
-    pdf.cell(100, 8, "References", 0, 0, 'L')
-    pdf.cell(0, 8, str(len(content['sections']) + 5), 0, 1, 'R')
+    
+    toc_items = []
+    toc_items.append(("Introduction", "3"))
+    for i, section in enumerate(content.get('sections', [])):
+        title = sanitize_for_pdf(section.get('title', f"Section {i+1}"))
+        # Truncate long titles
+        if len(title) > 40:  # Shorter limit for handwritten style
+            title = title[:37] + "..."
+        toc_items.append((title, f"{i+4}"))
+    toc_items.append(("Conclusion", f"{len(content.get('sections', [])) + 4}"))
+    toc_items.append(("References", f"{len(content.get('sections', [])) + 5}"))
+    
+    # Dynamically calculate left width based on page width
+    left_width = pdf.w - 40  # Reduced from fixed 120 to dynamic width with margin
+    
+    for left_text, right_text in toc_items:
+        # Calculate available width after text and page number
+        text_width = pdf.get_string_width(left_text)
+        num_width = pdf.get_string_width(right_text)
+        available_width = left_width - text_width - num_width - 5  # 5px extra margin
+        
+        # Calculate dots that will fit
+        dot_width = pdf.get_string_width(".")
+        num_dots = max(1, int(available_width / dot_width))
+        dots = "." * num_dots if num_dots > 0 else ""
+        
+        # Print TOC line with calculated components
+        pdf.cell(text_width, 8, left_text, 0, 0, 'L')
+        pdf.cell(available_width, 8, dots, 0, 0, 'L')
+        pdf.cell(num_width, 8, right_text, 0, 1, 'R')
     
     def write_handwritten_section(title, content_text, is_main_section=False):
         if not title:
             return
         pdf.add_page()
-        # Reset vertical position near top
-        pdf.set_y(20)
+        # Reset vertical position with more space at top
+        pdf.set_y(25)  # Increased from 20 to 25 for more top margin
         pdf.set_font("Handwriting", '', 22)
-        pdf.cell(0, 10, title, 0, 1, 'C')
+        
+        # Handle long titles by checking width and potentially splitting
+        if pdf.get_string_width(title) > (pdf.w - 40):  # Conservative width check
+            # Split title if too long
+            words = title.split()
+            line = ""
+            for word in words:
+                test_line = line + " " + word if line else word
+                if pdf.get_string_width(test_line) < (pdf.w - 40):
+                    line = test_line
+                else:
+                    pdf.cell(0, 10, line, 0, 1, 'C')
+                    line = word
+            if line:
+                pdf.cell(0, 10, line, 0, 1, 'C')
+        else:
+            pdf.cell(0, 10, title, 0, 1, 'C')
+            
         pdf.ln(5)
         pdf.set_font("Handwriting", '', 14)
-        pdf.multi_cell(0, 8, content_text)
+        
+        # Clean content text to remove all \n\n and \n
+        content_text = re.sub(r'\\n\\n', ' ', content_text)
+        content_text = re.sub(r'\\n', ' ', content_text)
+        
+        pdf.multi_cell(0, 10, content_text)
 
-    # Introduction - limit to 15% of content space
+    # Introduction
     intro_words = intro_text.split()
     intro_text = ' '.join(intro_words) 
     
     write_handwritten_section("Introduction:", intro_text)
     
-    # Sections with more content
-    for section in content.get('sections', []):
+    # Replace generic section titles with meaningful ones
+    if not content.get('sections'):
+        section_count = max(3, min(5, requested_pages // 2))
+        meaningful_titles = [
+            f"My Thoughts on {title}",
+            f"Key Ideas About {title}",
+            f"Understanding {title} Better",
+            f"Interesting Aspects of {title}",
+            f"Reflections on {title}"
+        ]
+        
+        content["sections"] = [
+            {
+                "title": meaningful_titles[i % len(meaningful_titles)],
+                "content": f"Extended commentary and detailed discussion on {title}."
+            } for i in range(section_count)
+        ]
+    
+    # Track remaining pages to ensure conclusion and references fit
+    remaining_pages = max(2, pdf.target_pages - pdf.current_page - 2)  # Reserve 2 pages for conclusion and references
+    section_pages = min(len(content.get('sections', [])), remaining_pages)
+    
+    # Sections with more content - limited to fit within page limit
+    for section in content.get('sections', [])[:section_pages]:
+        section_content = sanitize_for_pdf(section.get('content', ''))
+        section_content = re.sub(r'\\n\\n', ' ', section_content)
+        section_content = re.sub(r'\\n', ' ', section_content)
+        
         write_handwritten_section(
             sanitize_for_pdf(section.get('title', 'Section')), 
-            sanitize_for_pdf(section.get('content', '')),
+            section_content,
             is_main_section=True
         )
-        # Conclusion - limit to 15% of content space
-    conclusion_text = sanitize_for_pdf(content.get('conclusion', '').strip())
-    if not conclusion_text:
-        conclusion_text = f"In conclusion, {title} represents an important area of study. This report has highlighted key aspects and considerations related to the topic."
     
-    conclusion_words = conclusion_text.split()
-    conclusion_text = ' '.join(conclusion_words)
+    # Make sure we finish exactly on target page count BEFORE adding conclusion/references
+    # This will prevent duplicate conclusion/references pages
+    while pdf.current_page < (pdf.target_pages - 2):
+        pdf.add_page()
+        pdf.set_font("Handwriting", '', 16)
+        extra_page_number = pdf.current_page
+        
+        # Create different headings based on the page number
+        headings = [
+            f"Additional Notes - Page {extra_page_number}",
+            f"More Thoughts on {title}",
+            f"Important Considerations",
+            f"Related Ideas & Concepts",
+            f"Questions & Reflections"
+        ]
+        heading_index = extra_page_number % len(headings)
+        heading_text = headings[heading_index]
+        
+        # Check if heading is too long for the page width
+        if pdf.get_string_width(heading_text) > (pdf.w - 40):
+            words = heading_text.split()
+            line = ""
+            for word in words:
+                test_line = line + " " + word if line else word
+                if pdf.get_string_width(test_line) < (pdf.w - 40):
+                    line = test_line
+                else:
+                    pdf.cell(0, 10, line, 0, 1, 'C')
+                    line = word
+            if line:
+                pdf.cell(0, 10, line, 0, 1, 'C')
+        else:
+            pdf.cell(0, 10, heading_text, 0, 1, 'C')
+            
+        pdf.ln(5)
+        
+        pdf.set_font("Handwriting", '', 12)
+        
+        # Create varied content for each extra page in a more casual, handwritten style
+        extra_contents = [
+            f"I've been thinking more about {title} and have some extra ideas to share.",
+            f"Looking back at the main points about {title}, there are interesting implications worth exploring further.",
+            f"Notably, {title} relates to real-world situations through several practical examples.",
+            f"Considering the historical context, {title}'s evolution is quite fascinating.",
+            f"These are some questions about {title} that invite further investigation."
+        ]
+        
+        content_index = (extra_page_number + 3) % len(extra_contents)
+        pdf.multi_cell(0, 10, extra_contents[content_index])
+        pdf.ln(5)
+        
+        # Add some personalized bullet points or notes
+        if extra_page_number % 2 == 0:
+            ideas = [
+                "* Need to look into this more - seems important",
+                "* Reminds me of similar concepts in related fields",
+                "* Worth comparing different approaches here"
+            ]
+            for idea in ideas:
+                pdf.multi_cell(0, 10, idea)
+                pdf.ln(3)
+        else:
+            pdf.multi_cell(0, 10, f"I think the most interesting aspect of {title} might be how it connects to other areas. Nothing exists in isolation - everything is connected in some way.")
     
+    # Now add the conclusion and references exactly once
+    # Conclusion Page
+    conclusion_text = sanitize_for_pdf(content.get('conclusion', '').strip()) or f"In conclusion, {title} represents an important area of study."
+    conclusion_text = re.sub(r'\\n\\n', ' ', conclusion_text)
+    conclusion_text = re.sub(r'\\n', ' ', conclusion_text)
     write_handwritten_section("Conclusion:", conclusion_text)
     
-    # References with tighter spacing
+    # References Page (only once)
     pdf.add_page()
-    pdf.set_y(20)
-    pdf.set_font_size(12)
+    pdf.set_y(25)  # Increased from 20 to 25
+    pdf.set_font("Handwriting", '', 16)  # Increased from 12 to 16
     pdf.cell(0, 10, "References", 0, 1, 'C')
-    pdf.ln(3)
+    pdf.ln(5)
     
-    pdf.set_font_size(10)  # Smaller font
-    y_pos = 30
-    max_width = pdf.w - 25
+    pdf.set_font("Handwriting", '', 12)  # Increased from 10 to 12
     
     # Fix references extraction and handling
     references = []
     if isinstance(content.get('references'), list):
         references = [ref for ref in content.get('references') if ref and isinstance(ref, str)]
-    
-    # Debug print
-    print(f"Found {len(references)} references for handwritten PDF")
     
     # If no valid references, generate defaults
     if len(references) == 0:
@@ -631,25 +790,42 @@ def create_handwritten_pdf(title, content):
             f"White, S., & Miller, T. (2022). Future directions for {title} research. Future Perspectives, 12(1), 34-56."
         ]
     
-    # Ensure all references are properly sanitized
+    # Ensure all references are properly sanitized and handle long references
     references = [sanitize_for_pdf(ref) for ref in references]
     
     for i, ref in enumerate(references, 1):
         numbered_ref = f"{i}. {ref}"
-        pdf.multi_cell(0, 7, numbered_ref)
+        # Handle long references with wrapping
+        if pdf.get_string_width(numbered_ref) > (pdf.w - 30):
+            words = numbered_ref.split()
+            line = ""
+            first_line = True
+            for word in words:
+                test_line = line + " " + word if line else word
+                if pdf.get_string_width(test_line) < (pdf.w - 30):
+                    line = test_line
+                else:
+                    if first_line:
+                        pdf.multi_cell(0, 7, line)
+                        first_line = False
+                    else:
+                        pdf.set_x(15)  # Indent continued lines
+                        pdf.multi_cell(0, 7, line)
+                    line = word
+            if line:
+                if first_line:
+                    pdf.multi_cell(0, 7, line)
+                else:
+                    pdf.set_x(15)
+                    pdf.multi_cell(0, 7, line)
+        else:
+            pdf.multi_cell(0, 7, numbered_ref)
         pdf.ln(2)
-
-    # Adjust the thank-you text positioning
-    pdf.ln(6)
-    pdf.set_font_size(12)
-    pdf.cell(0, 10, "Thank you", 0, 1, 'C')
     
-    # Make sure we finish exactly on target page count
-    while pdf.current_page < pdf.target_pages:
-        pdf.add_page()
-        pdf.set_font("Times", 'B', 14)
-        pdf.cell(0, 10, "End of Report", 0, 1, 'C')
-        pdf.ln(6)
+    # Add thank you note with proper spacing
+    pdf.ln(6)
+    pdf.set_font("Handwriting", '', 14)  # Increased from 12 to 14
+    pdf.cell(0, 10, "Thank you", 0, 1, 'C')
     
     # Save the PDF
     pdf.output(output_path)

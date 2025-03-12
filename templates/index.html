@@ -5,80 +5,153 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Report Generator</title>
+    <link rel="icon" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/svgs/solid/file-lines.svg"
+        type="image/svg+xml">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
-            background-color: #f5f5f5;
+            background-color: #f0f2f5;
             padding-top: 50px;
+            font-family: 'Segoe UI', Arial, sans-serif;
         }
 
         .container {
             max-width: 800px;
             background-color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
         }
 
         .form-label {
             font-weight: 500;
+            color: #333;
         }
 
         .btn-primary {
             background-color: #4285F4;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 20px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
         .btn-primary:hover {
             background-color: #3367D6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary:disabled {
+            background-color: #a0b4e0;
+            cursor: not-allowed;
         }
 
         h1 {
             color: #4285F4;
             margin-bottom: 30px;
+            font-weight: 700;
         }
 
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
+        .header-icon {
+            color: #4285F4;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .card.selected {
+            border: 2px solid #4285F4;
+            background-color: #f8f9ff;
+            box-shadow: 0 5px 15px rgba(66, 133, 244, 0.2);
+        }
+
+        .option-card {
+            padding: 20px;
+            margin-bottom: 5px;
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .option-card:hover {
+            background-color: #f9fbff;
+        }
+
+        .form-check-label {
+            padding-left: 5px;
+            font-weight: 500;
+        }
+
+        .form-check {
+            padding: 10px 0;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .form-text {
+            color: #666;
         }
 
         .alert {
-            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
         }
 
-        #handwritingSample {
+        /* Spinner styling */
+        .spinner-container {
             display: none;
-            margin-top: 10px;
-        }
-
-        .sample-preview {
-            max-width: 100%;
-            max-height: 200px;
-            margin-top: 10px;
-            display: none;
-        }
-
-        /* Simple spinner styling */
-        #loader {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
         }
 
         .spinner {
-            margin: 0 auto;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #ccc;
-            border-top: 4px solid #555;
+            width: 70px;
+            height: 70px;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #4285F4;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
 
+        .spinner-text {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: 500;
+            color: #333;
+        }
+
         @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
             100% {
                 transform: rotate(360deg);
             }
@@ -88,108 +161,119 @@
 
 <body>
     <div class="container">
-        <h1 class="text-center">AI Report Generator</h1>
-        <p class="text-center mb-4">Generate professional reports or handwritten notes on any topic using Google's
-            Gemini AI</p>
+        <div class="text-center mb-4">
+            <i class="fas fa-file-alt header-icon"></i>
+            <h1 class="text-center">AI Report Generator</h1>
+            <p class="text-muted">Generate professional reports or handwritten notes on any topic using Google's
+                Gemini AI</p>
+        </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'error' else 'danger' }}" role="alert">
+        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show"
+            role="alert">
             {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endfor %}
         {% endif %}
         {% endwith %}
 
-        <form action="/generate" method="post" id="reportForm" target="_blank" enctype="multipart/form-data"
-            onsubmit="showLoader()">
-            <div class="mb-3">
-                <label for="topic" class="form-label">Report Topic</label>
-                <input type="text" class="form-control" id="topic" name="topic" required
-                    placeholder="e.g., Climate Change Impact on Ocean Ecosystems">
-            </div>
-
-            <div class="mb-3">
-                <label for="pages" class="form-label">Number of Pages</label>
-                <input type="number" class="form-control" id="pages" name="pages" min="1" max="20" value="3" required>
-                <div class="form-text">Each page is approximately 500 words. We'll strictly adhere to your requested
-                    page count.</div>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Report Type</label>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="type" id="typed" value="typed" checked>
-                    <label class="form-check-label" for="typed">
-                        Professionally Typed PDF
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="type" id="handwritten" value="handwritten">
-                    <label class="form-check-label" for="handwritten">
-                        Handwritten Style PDF
-                    </label>
+        <div class="card">
+            <form action="/generate" method="post" id="reportForm" target="_blank" enctype="multipart/form-data">
+                <div class="mb-4">
+                    <label for="topic" class="form-label"><i class="fas fa-pen me-2"></i>Report Topic</label>
+                    <input type="text" class="form-control form-control-lg" id="topic" name="topic" required
+                        placeholder="e.g., Climate Change Impact on Ocean Ecosystems">
                 </div>
 
-                <div id="handwritingSample" class="mt-3">
-                    <label for="sample" class="form-label">Upload your handwriting sample:</label>
-                    <input type="file" class="form-control" id="sample" name="sample" accept="image/*">
-                    <div class="form-text">Upload a clear image of your handwritten text to mimic your writing style.
+                <div class="mb-4">
+                    <label for="pages" class="form-label"><i class="fas fa-file-alt me-2"></i>Number of Pages</label>
+                    <input type="number" class="form-control form-control-lg" id="pages" name="pages" min="1" max="10"
+                        value="3" required>
+                    <div class="form-text">Each page is approximately 500 words. We'll strictly adhere to your requested
+                        page count.</div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label"><i class="fas fa-palette me-2"></i>Report Type</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card h-100 selected" id="typedCard" onclick="selectReportType('typed')">
+                                <div class="option-card">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <input class="form-check-input me-2" type="radio" name="type" id="typed"
+                                            value="typed" checked>
+                                        <label class="form-check-label fw-bold" for="typed">
+                                            <i class="fas fa-laptop me-2"></i> Professionally Typed PDF
+                                        </label>
+                                    </div>
+                                    <p class="text-muted mb-0">Formal academic formatting with professional layout and
+                                        proper citations</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100" id="handwrittenCard" onclick="selectReportType('handwritten')">
+                                <div class="option-card">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <input class="form-check-input me-2" type="radio" name="type" id="handwritten"
+                                            value="handwritten">
+                                        <label class="form-check-label fw-bold" for="handwritten">
+                                            <i class="fas fa-pen-nib me-2"></i> Handwritten Style PDF
+                                        </label>
+                                    </div>
+                                    <p class="text-muted mb-0">Natural looking handwritten notes with casual,
+                                        conversational style</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <img id="samplePreview" class="sample-preview" alt="Handwriting sample preview">
                 </div>
-            </div>
 
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary" id="generateBtn">Generate Report</button>
-            </div>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2">Generating your report... This may take a few minutes.</p>
-        </div>
-
-        <div id="loader">
-            <div class="spinner"></div>
-            <p>Generating your report, please wait...</p>
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg" id="generateBtn">
+                        <i class="fas fa-magic me-2"></i>Generate Report
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
+    <!-- Hidden spinner that shows when generating -->
+    <div class="spinner-container" id="spinnerContainer" style="display: none;">
+        <div class="spinner"></div>
+        <p class="spinner-text">Generating your report...</p>
+        <p class="text-muted">This may take a few minutes</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Show/hide handwriting sample upload based on selected report type
-        document.getElementById('typed').addEventListener('change', function () {
-            document.getElementById('handwritingSample').style.display = 'none';
-        });
+        // Select report type when clicking anywhere on the card
+        function selectReportType(type) {
+            // Update the radio input
+            document.getElementById(type).checked = true;
 
-        document.getElementById('handwritten').addEventListener('change', function () {
-            document.getElementById('handwritingSample').style.display = 'block';
-        });
+            // Clear previous selection styling
+            document.getElementById('typedCard').classList.remove('selected');
+            document.getElementById('handwrittenCard').classList.remove('selected');
 
-        // Preview uploaded handwriting sample
-        document.getElementById('sample').addEventListener('change', function (event) {
-            const preview = document.getElementById('samplePreview');
-            const file = event.target.files[0];
-
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                }
-                reader.readAsDataURL(file);
+            // Add styling to the selected card
+            if (type === 'typed') {
+                document.getElementById('typedCard').classList.add('selected');
             } else {
-                preview.style.display = 'none';
+                document.getElementById('handwrittenCard').classList.add('selected');
             }
-        });
+        }
 
         // Form submission handling
         document.getElementById('reportForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            // Show spinner
+            document.getElementById('spinnerContainer').style.display = 'flex';
             document.getElementById('generateBtn').disabled = true;
-            document.getElementById('loading').style.display = 'block';
 
             // Create a form data object from the form
             const formData = new FormData(this);
@@ -197,44 +281,40 @@
             // Open the form submission in a new window/tab for the download
             const submitWindow = window.open('about:blank', '_blank');
 
-            // Reset the loading state immediately after window opens
-            setTimeout(function () {
+            if (submitWindow) {
+                // Create a temporary form in the new window and submit it
+                const tempForm = submitWindow.document.createElement('form');
+                tempForm.action = '/generate';
+                tempForm.method = 'POST';
+
+                // Add the form data to the temporary form
+                for (const [key, value] of formData.entries()) {
+                    const input = submitWindow.document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    tempForm.appendChild(input);
+                }
+
+                // Add the form to the document body and submit it
+                submitWindow.document.body.appendChild(tempForm);
+                tempForm.submit();
+
+                // Reset button state immediately - don't wait for window load
                 document.getElementById('generateBtn').disabled = false;
-                document.getElementById('loading').style.display = 'none';
-            }, 1000);
-
-            // Create a temporary form in the new window and submit it
-            const tempForm = submitWindow.document.createElement('form');
-            tempForm.action = '/generate';
-            tempForm.method = 'POST';
-
-            // Add the form data to the temporary form
-            for (const [key, value] of formData.entries()) {
-                const input = submitWindow.document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = value;
-                tempForm.appendChild(input);
+                document.getElementById('spinnerContainer').style.display = 'none';
+            } else {
+                // If popup is blocked, show an alert and reset button state
+                alert("Please allow popups for this site to generate reports in a new tab.");
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('spinnerContainer').style.display = 'none';
             }
-
-            // Add the form to the document body and submit it
-            submitWindow.document.body.appendChild(tempForm);
-            tempForm.submit();
-
-            // Prevent the original form from submitting
-            event.preventDefault();
         });
 
-        function showLoader() {
-            document.getElementById('loader').style.display = 'block';
-        }
-    </script>
-
-    <script>
         // If the page is loaded after a redirect (from error), reset loading state
         window.onload = function () {
             document.getElementById('generateBtn').disabled = false;
-            document.getElementById('loading').style.display = 'none';
+            document.getElementById('spinnerContainer').style.display = 'none';
         };
     </script>
 </body>

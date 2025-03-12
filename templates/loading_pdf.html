@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generating Your Report...</title>
+    <link rel="icon" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/svgs/solid/file-lines.svg"
+        type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        .loading-container {
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .spinner {
+            width: 80px;
+            height: 80px;
+            margin: 30px auto;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #4285F4;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .progress {
+            height: 10px;
+            margin: 20px 0 30px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+        }
+
+        .progress-bar {
+            background-color: #4285F4;
+            width: 0%;
+            border-radius: 5px;
+            transition: width 0.5s ease;
+            animation: progress-animation 30s ease-in-out;
+        }
+
+        .loading-title {
+            color: #333;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .loading-text {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            background-color: #e8f0fe;
+            color: #4285F4;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator i {
+            margin-right: 5px;
+            animation: pulse 1.5s ease infinite;
+        }
+
+        #statusText {
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .completion-steps {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .step {
+            margin: 5px 0;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+
+        .step i {
+            margin-right: 10px;
+            color: #ccc;
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .step.active i {
+            color: #4285F4;
+        }
+
+        .step.completed i {
+            color: #34A853;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes progress-animation {
+            0% {
+                width: 5%;
+            }
+
+            20% {
+                width: 25%;
+            }
+
+            50% {
+                width: 50%;
+            }
+
+            70% {
+                width: 70%;
+            }
+
+            90% {
+                width: 85%;
+            }
+
+            100% {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loading-container">
+        <div class="status-indicator">
+            <i class="fas fa-sync-alt"></i> In Progress
+        </div>
+        <h2 class="loading-title">Generating Your Report</h2>
+        <p class="loading-text">We're using Gemini AI to create a detailed report on your topic.</p>
+
+        <div class="spinner"></div>
+
+        <div class="progress">
+            <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+        </div>
+
+        <p id="statusText">Please wait while we prepare your document...</p>
+
+        <div class="completion-steps">
+            <div class="step active" id="step1">
+                <i class="fas fa-check-circle"></i> Analyzing topic and collecting information
+            </div>
+            <div class="step" id="step2">
+                <i class="fas fa-circle"></i> Generating content and references
+            </div>
+            <div class="step" id="step3">
+                <i class="fas fa-circle"></i> Creating PDF document
+            </div>
+            <div class="step" id="step4">
+                <i class="fas fa-circle"></i> Finalizing your report
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Function to simulate progress through the steps
+        function simulateProgress() {
+            setTimeout(() => {
+                document.getElementById('step1').classList.add('completed');
+                document.getElementById('step2').classList.add('active');
+                document.getElementById('statusText').textContent = "Generating content and organizing sections...";
+            }, 4000);
+
+            setTimeout(() => {
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('active');
+                document.getElementById('statusText').textContent = "Creating PDF document with formatting...";
+            }, 10000);
+
+            setTimeout(() => {
+                document.getElementById('step3').classList.add('completed');
+                document.getElementById('step4').classList.add('active');
+                document.getElementById('statusText').textContent = "Almost done! Preparing for download...";
+            }, 20000);
+        }
+
+        // Start the progress animation
+        document.getElementById('progressBar').style.animation = "progress-animation 30s ease-in-out";
+        simulateProgress();
+
+        // Function to check if PDF is ready
+        function checkPDF() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('HEAD', "{{ pdf_url }}", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4) {
+                    if (xhr.status == 200) {
+                        // Complete all steps when PDF is ready
+                        document.querySelectorAll('.step').forEach(step => {
+                            step.classList.add('active');
+                            step.classList.add('completed');
+                        });
+                        document.getElementById('statusText').textContent = "Report complete! Redirecting...";
+                        document.getElementById('progressBar').style.width = '100%';
+
+                        // Redirect after a brief pause to show completion
+                        setTimeout(() => {
+                            window.location.href = "{{ pdf_url }}";
+                        }, 1500);
+                    } else {
+                        // Continue checking every 3 seconds
+                        setTimeout(checkPDF, 3000);
+                    }
+                }
+            };
+            xhr.send(null);
+        }
+
+        // Start checking after 3 seconds
+        setTimeout(checkPDF, 3000);
+    </script>
+</body>
+
+</html>

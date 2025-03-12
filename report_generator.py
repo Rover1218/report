@@ -40,40 +40,63 @@ def generate_report(topic, num_pages, is_handwritten=False):
     word_count = num_pages * 600
     
     # Determine optimal section count based on page count
-    section_count = min(5, max(3, num_pages))
+    section_count = max(3, min(num_pages, 8))  # Minimum 3, maximum 8 sections
+    
+    # Calculate approximate words per section for the model
+    words_per_section = int((word_count * 0.7) / section_count)  # 70% of content for sections
+    
+    # Create dynamic example sections based on section_count
+    example_sections = []
+    section_examples = [
+        {"title": "Historical Context and Background", "content": f"Content about the history of {topic} (approx. {words_per_section} words)"},
+        {"title": "Theoretical Framework and Key Concepts", "content": f"Content explaining theories related to {topic}"},
+        {"title": "Current Research and Findings", "content": f"Content about recent studies on {topic}"},
+        {"title": "Practical Applications and Implications", "content": f"Content about how {topic} is applied"},
+        {"title": "Critical Analysis and Evaluation", "content": f"Content analyzing strengths and weaknesses of {topic}"},
+        {"title": "Case Studies and Real-World Examples", "content": f"Content featuring examples of {topic} in practice"},
+        {"title": "Future Directions and Emerging Trends", "content": f"Content about where {topic} is heading"},
+        {"title": "Interdisciplinary Connections", "content": f"Content about how {topic} relates to other fields"}
+    ]
+    
+    # Select the first section_count examples to show in the prompt
+    for i in range(min(section_count, len(section_examples))):
+        example_sections.append(section_examples[i])
+    
+    # Generate sections JSON string for the prompt
+    sections_json = ",\n        ".join([
+        f'{{\n          "title": "{section["title"]}",\n          "content": "{section["content"]}"\n        }}'
+        for section in example_sections
+    ])
     
     # Adjust prompt based on whether it's for handwritten or typed format
     writing_style = "casual, personal, and conversational" if is_handwritten else "formal, academic"
     content_style = "bullet points, shorter paragraphs, and more direct language" if is_handwritten else "detailed paragraphs with academic depth"
     
-    # Create a more explicit prompt for valid JSON
+    # Extra instructions for longer reports (e.g., 30 pages)
+    extra_instruction = ""
+    if num_pages >= 30:
+        extra_instruction = "\n- Since the report spans a high page count, include extended analysis, elaborate descriptions, and additional subsections to cover all aspects comprehensively."
+    
+    # Adjust prompt to specifically request meaningful section titles with dynamic section count
     prompt = f"""
     Your task is to create a {"personal, handwritten-style" if is_handwritten else "detailed academic"} report on: "{topic}"
 
     Requirements:
-    - Content should fill {num_pages} pages (approximately {word_count} words total)
-    - Use {writing_style} writing style with {"fewer" if is_handwritten else "academic"} citations
+    - Content should fill {num_pages} pages (approximately {word_count} words total){extra_instruction}
+    - Include exactly {section_count} sections with meaningful titles
+    - Use {writing_style} writing style
+    - {"Use more personal language and straightforward formatting" if is_handwritten else "INCLUDE AT LEAST 5 DETAILED ACADEMIC REFERENCES with proper citation format"}
     - Include relevant examples and facts
     - Use only ASCII characters - DO NOT use special symbols or unicode characters
-    - {"Use more personal language, first-person perspective where appropriate" if is_handwritten else "INCLUDE AT LEAST 5 DETAILED ACADEMIC REFERENCES with proper citation format"}
-
+    - {"Use " + content_style if is_handwritten else "MAKE SURE TO INCLUDE ACTUAL REFERENCES RELATED TO THE TOPIC"}
+    - IMPORTANT: Give each section a SPECIFIC, UNIQUE, DESCRIPTIVE title related to its content (NO generic titles like "Section 1")
+    
     Return ONLY a valid JSON object with this exact structure:
     {{
       "title": "{topic}",
       "introduction": "A {"brief, engaging" if is_handwritten else "comprehensive"} introduction ({int(word_count * 0.15)} words)",
       "sections": [
-        {{
-          "title": "Section 1",
-          "content": "Content for section 1"
-        }},
-        {{
-          "title": "Section 2",
-          "content": "Content for section 2"
-        }},
-        {{
-          "title": "Section 3", 
-          "content": "Content for section 3"
-        }}
+        {sections_json}
       ],
       "conclusion": "A {"brief, personal" if is_handwritten else "thorough"} conclusion",
       "references": [
@@ -84,13 +107,6 @@ def generate_report(topic, num_pages, is_handwritten=False):
         "Author, E. (Year). Title of reference 5. Journal/Publisher, Vol(Issue), pages."
       ]
     }}
-
-    IMPORTANT:
-    - Ensure your response is VALID JSON - use double quotes for strings
-    - Do NOT include explanatory text outside the JSON
-    - Use plain ASCII characters only - NO unicode or special characters
-    - NO comments in the JSON
-    - {"Use {content_style} (more suitable for handwritten notes)" if is_handwritten else "MAKE SURE TO INCLUDE ACTUAL REFERENCES RELATED TO THE TOPIC"}
     """
     
     try:
@@ -188,5 +204,23 @@ def generate_report(topic, num_pages, is_handwritten=False):
                 "title": section_title,
                 "content": section_content
             })
+        
+        # If we're using fallback, create more meaningful section titles
+        if len(fallback_report["sections"]) > 0:
+            section_themes = [
+                f"Historical Context of {topic}",
+                f"Theoretical Framework for {topic}",
+                f"Practical Applications of {topic}",
+                f"Current Research on {topic}",
+                f"Critical Analysis of {topic}",
+                f"Future Directions for {topic} Research",
+                f"Interdisciplinary Connections to {topic}",
+                f"Methodological Approaches to {topic}",
+                f"Case Studies in {topic}",
+                f"Controversies and Debates in {topic}"
+            ]
+            
+            for i, section in enumerate(fallback_report["sections"]):
+                section["title"] = section_themes[i % len(section_themes)]
         
         return fallback_report

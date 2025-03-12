@@ -34,14 +34,16 @@ def generate():
         content = generate_report(topic, num_pages, is_handwritten=(report_type == 'handwritten'))
         content['requested_pages'] = num_pages
 
-        # Create PDF without uploading any picture
         if report_type == 'typed':
             pdf_path = create_typed_pdf(topic, content)
         else:
             pdf_path = create_handwritten_pdf(topic, content)
         
-        # Let the PDF be displayed in the browser
-        return send_file(pdf_path)
+        # Convert the generated pdf_path to a URL accessible by the browser:
+        pdf_url = "/" + pdf_path.replace("\\", "/")  
+        
+        # Render a loader page that polls for the PDF and then redirects.
+        return render_template('loading_pdf.html', pdf_url=pdf_url)
     except Exception as e:
         print(f"Error: {str(e)}")
         print(traceback.format_exc())
