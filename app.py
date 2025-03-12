@@ -31,9 +31,22 @@ def generate():
         num_pages = int(request.form['pages'])
         report_type = request.form['type']
         
+        # Generate the report content
         content = generate_report(topic, num_pages, is_handwritten=(report_type == 'handwritten'))
+        
+        # Validate the report structure before proceeding
+        if not isinstance(content, dict):
+            raise ValueError("Invalid report structure: not a dictionary")
+        
+        required_keys = ['title', 'introduction', 'sections', 'conclusion', 'references']
+        missing_keys = [key for key in required_keys if key not in content]
+        
+        if missing_keys:
+            raise ValueError(f"Invalid report structure: missing keys {missing_keys}")
+            
         content['requested_pages'] = num_pages
 
+        # Create the PDF
         if report_type == 'typed':
             pdf_path = create_typed_pdf(topic, content)
         else:

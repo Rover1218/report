@@ -136,21 +136,33 @@ def create_typed_pdf(title, content):
     
     pdf.set_font("Times", '', 18)
     
-    # Create abstract as a condensed version of the introduction (not the full text)
+    # Create completely different abstract that's not derived from introduction
     intro_text = sanitize_for_pdf(str(content.get('introduction', '')))
-    if intro_text:
-        # Use only first 1-2 sentences for abstract (roughly 30% of intro)
-        words = intro_text.split()
-        abstract_word_count = min(len(words) // 3, 100)  # Take ~1/3 of intro or 100 words max
-        abstract = ' '.join(words[:abstract_word_count])
-        
-        # Add ellipsis if we truncated
-        if abstract_word_count < len(words):
-            abstract += '...'
-    else:
-        abstract = f"This report examines {title} and provides a comprehensive analysis of its key aspects."
     
-    pdf.multi_cell(0, 9, abstract)  # Increased line spacing from 7 to 9
+    # Generate a unique abstract with a different approach and style than the introduction
+    abstract = f"This scholarly examination investigates {title} through a comprehensive analytical framework. "
+    
+    # Add topic-specific content based on report title
+    if "analysis" in title.lower() or "study" in title.lower():
+        abstract += f"The report evaluates key methodologies, presents critical findings, and discusses theoretical implications. "
+    elif "impact" in title.lower() or "effect" in title.lower():
+        abstract += f"This report examines causal relationships, quantifies outcomes, and assesses broader implications within the field. "
+    elif "history" in title.lower() or "evolution" in title.lower():
+        abstract += f"A chronological analysis illustrates developmental patterns and pivotal moments that shaped current understanding. "
+    elif "comparison" in title.lower() or "versus" in title.lower():
+        abstract += f"The comparative framework employed highlights contrasts and similarities between key aspects, offering nuanced insights. "
+    else:
+        abstract += f"Key concepts are systematically analyzed, providing a foundation for understanding fundamental principles and practical applications. "
+    
+    # Add methodological approach
+    abstract += f"Through critical examination of relevant literature and synthesis of expert perspectives, this report presents a comprehensive overview of {title}. "
+    
+    # Add purpose statement that's different from introduction
+    abstract += f"The analysis aims to contribute meaningful insights to the existing body of knowledge while identifying areas for future research and development."
+    
+    # Use a smaller font size to fit more content in the abstract section
+    pdf.set_font("Times", '', 16)  # Reduced from 18 to 16 to fit more content
+    pdf.multi_cell(0, 8, abstract)  # Reduced line spacing from 9 to 8
     pdf.ln(2)
     
     # Move Table of Contents to a new page
@@ -166,20 +178,21 @@ def create_typed_pdf(title, content):
     # Format TOC items bigger
     pdf.set_font("Times", '', 16)  # Increased from 12 to 16
     
+    # Initialize page counter for TOC (starts at page 3 because we've used 2 pages so far)
+    current_page_counter = 3
+    
     # Add Introduction to TOC
-    pdf.cell(0, 5, "Introduction .......... 2", 0, 1)
+    pdf.cell(0, 5, f"Introduction .......... {current_page_counter}", 0, 1)
+    current_page_counter += 1
     
     # Add Sections to TOC
     sections = content.get('sections', [])
     for i, section in enumerate(sections):
         section_title = sanitize_for_pdf(str(section.get('title', f"Section {i+1}")))
-        # If section title is too long, truncate it for TOC
-        if len(section_title) > 50:  # Reduced from 70 to 50 for better spacing
-            section_title = section_title[:47] + "..."
-            
+        
         # Calculate available width for dots
         title_width = pdf.get_string_width(section_title)
-        page_num = f"{i+3}"
+        page_num = f"{current_page_counter}"
         page_num_width = pdf.get_string_width(page_num)
         available_width = pdf.w - 40 - title_width - page_num_width  # 40 is margin
         
@@ -192,10 +205,17 @@ def create_typed_pdf(title, content):
         pdf.cell(title_width, 5, section_title, 0, 0)
         pdf.cell(available_width, 5, dots, 0, 0)
         pdf.cell(page_num_width, 5, page_num, 0, 1, 'R')
+        
+        # Increase page counter for next section
+        current_page_counter += 1
     
-    # Add Conclusion and References to TOC
-    pdf.cell(0, 5, f"Conclusion .......... {len(sections)+3}", 0, 1)
-    pdf.cell(0, 5, f"References .......... {len(sections)+4}", 0, 1)
+    # Add Conclusion and References to TOC with correct page numbers
+    pdf.cell(0, 5, f"Conclusion .......... {current_page_counter}", 0, 1)
+    current_page_counter += 1
+    pdf.cell(0, 5, f"References .......... {current_page_counter}", 0, 1)
+    
+    # Store total pages needed from TOC
+    expected_total_pages = current_page_counter
     
     # Always force Introduction to start on a new page
     pdf.add_page()
@@ -255,9 +275,16 @@ def create_typed_pdf(title, content):
     sections_count = len(content.get('sections', [])) or 1
     chars_per_section = int((chars_per_page * content_pages * 0.7) / sections_count)
     
-    # Process sections
-    for i, section in enumerate(content.get('sections', [])[:section_pages]):
+    # Process ALL sections - don't limit by section_pages calculation
+    for i, section in enumerate(content.get('sections', [])):
+        # Always start each section on a new page
         pdf.add_page()
+        # Reset the Y position to ensure consistent spacing at top of page
+        pdf.set_y(20)
+        
+        # Debug output to help track section processing
+        print(f"Processing section {i+1}: {section.get('title', 'Untitled')}")
+        
         # Enhanced section title styling
         pdf.set_font("Times", 'B', 18)
         
@@ -306,35 +333,12 @@ def create_typed_pdf(title, content):
                 
         pdf.ln(2)
     
-    # Ensure conclusion and references always appear, regardless of page countpages are added before them
-    reserved_pages = 2  # Reserve 2 pages for Conclusion and References
-
-    # Add dynamic additional insight pages until current page equals (target_pages - reserved_pages)
-    while pdf.current_page < (pdf.target_pages - reserved_pages):
+    # Calculate how many pages to add before conclusion based on TOC expectations
+    conclusion_page_number = len(content.get('sections', [])) + 3  # Introduction + sections
+    
+    # Add filler pages only if needed to match TOC page numbering
+    while pdf.current_page < (conclusion_page_number - 1):
         pdf.add_page()
-        pdf.set_font("Times", 'B', 14)
-        extra_page_number = pdf.current_page
-        headings = [
-            f"Additional Insights - Page {extra_page_number}",
-            f"Further Analysis - {title}",
-            f"Extended Discussion - Key Concepts",
-            f"Supplementary Information",
-            f"Advanced Topics - {title}"
-        ]
-        heading_index = extra_page_number % len(headings)
-        pdf.cell(0, 10, headings[heading_index], 0, 1, 'C')
-        pdf.ln(6)
-        pdf.set_font("Times", '', 12)
-        extra_contents = [
-            f"This section explores additional theoretical frameworks related to {title}. Understanding these frameworks provides deeper insight into the subject matter.",
-            f"Building on the core concepts, this analysis offers alternative perspectives on {title}.",
-            f"The practical implementations of {title} span multiple domains. Case studies illustrate these concepts in action.",
-            f"Examining the historical evolution of {title} reveals important patterns and trends.",
-            f"Future research directions for {title} include promising avenues that could substantially advance understanding."
-        ]
-        content_index = (extra_page_number + 2) % len(extra_contents)
-        pdf.multi_cell(0, 7, extra_contents[content_index])
-        pdf.ln(5)
     
     # Now add the final reserved pages
     # Conclusion Page
@@ -562,18 +566,32 @@ def create_handwritten_pdf(title, content):
     intro_text = re.sub(r'\\n\\n', ' ', intro_text)
     intro_text = re.sub(r'\\n', ' ', intro_text)
     
-    # Create a condensed abstract from the introduction
-    if intro_text:
-        # Use only first 1-3 sentences for abstract (roughly 30% of intro)
-        words = intro_text.split()
-        abstract_word_count = min(len(words) // 3, 80)  # Take ~1/3 of intro or 80 words max for handwritten
-        abstract = ' '.join(words[:abstract_word_count])
-        
-        # Add ellipsis if we truncated
-        if abstract_word_count < len(words):
-            abstract += '...'
+    # Create a more substantial abstract from the introduction
+    # Create completely separate abstract not derived from introduction
+    intro_text = sanitize_for_pdf(content.get('introduction', '').replace('\n', ' ').strip())
+    intro_text = re.sub(r'\\n\\n', ' ', intro_text)
+    intro_text = re.sub(r'\\n', ' ', intro_text)
+    
+    # Generate a distinctly personal abstract that differs from introduction
+    abstract = f"I've been researching {title} for a while now, and wanted to share my thoughts and findings. "
+    
+    # Add personal perspective based on topic
+    if any(word in title.lower() for word in ["technology", "digital", "computer", "software", "system"]):
+        abstract += f"The way technology shapes this field fascinates me, especially how rapidly everything evolves and changes. "
+    elif any(word in title.lower() for word in ["history", "past", "ancient", "traditional", "heritage"]):
+        abstract += f"Looking back at how things developed over time gives such valuable perspective on where we are today. "
+    elif any(word in title.lower() for word in ["science", "research", "study", "experiment"]):
+        abstract += f"The scientific approach brings so much clarity to this topic, though there's still plenty we don't fully understand. "
+    elif any(word in title.lower() for word in ["art", "creative", "design", "cultural", "music"]):
+        abstract += f"The creative elements within this subject really highlight how it connects to our deeper human experiences. "
     else:
-        abstract = f"This report examines {title} and provides analysis of its key aspects."
+        abstract += f"What really stood out to me was how this topic connects to so many different fields and real-world situations. "
+    
+    # Add personal motivation
+    abstract += f"I wanted to explore different perspectives and put together something that might help others get a better handle on the main ideas. "
+    
+    # Add purpose statement different from introduction
+    abstract += f"This is my personal take on {title} - hope you find it useful!"
     
     pdf.add_page()
     pdf.set_y(20)
@@ -624,28 +642,42 @@ def create_handwritten_pdf(title, content):
     def write_handwritten_section(title, content_text, is_main_section=False):
         if not title:
             return
+        # Always start a new page for each section
         pdf.add_page()
-        # Reset vertical position with more space at top
-        pdf.set_y(25)  # Increased from 20 to 25 for more top margin
+        # Reset vertical position to a fixed value for consistent section starts
+        pdf.set_y(25)  # Fixed position for all section headings
         pdf.set_font("Handwriting", '', 22)
+        
+        # Calculate available height for title to ensure it fits on one page
+        available_height = pdf.h - 50  # Reserve space for content below heading
         
         # Handle long titles by checking width and potentially splitting
         if pdf.get_string_width(title) > (pdf.w - 40):  # Conservative width check
             # Split title if too long
             words = title.split()
             line = ""
+            lines_used = 0
+            max_lines = 3  # Limit heading to 3 lines maximum
+            
             for word in words:
                 test_line = line + " " + word if line else word
-                if pdf.get_string_width(test_line) < (pdf.w - 40):
+                if pdf.get_string_width(test_line) < (pdf.w - 40) and lines_used < max_lines:
                     line = test_line
                 else:
                     pdf.cell(0, 10, line, 0, 1, 'C')
+                    lines_used += 1
+                    if lines_used >= max_lines:
+                        # If we've reached max lines, add ellipsis and break
+                        if word != words[-1]:
+                            pdf.cell(0, 10, "...", 0, 1, 'C')
+                        break
                     line = word
-            if line:
+            if line and lines_used < max_lines:
                 pdf.cell(0, 10, line, 0, 1, 'C')
         else:
             pdf.cell(0, 10, title, 0, 1, 'C')
-            
+        
+        # Add extra space after title
         pdf.ln(5)
         pdf.set_font("Handwriting", '', 14)
         
@@ -699,8 +731,10 @@ def create_handwritten_pdf(title, content):
     # This will prevent duplicate conclusion/references pages
     while pdf.current_page < (pdf.target_pages - 2):
         pdf.add_page()
-        pdf.set_font("Handwriting", '', 16)
+        # Define extra_page_number variable before using it
         extra_page_number = pdf.current_page
+        pdf.set_y(25)  # Consistent heading position
+        pdf.set_font("Handwriting", '', 16)
         
         # Create different headings based on the page number
         headings = [
@@ -766,7 +800,7 @@ def create_handwritten_pdf(title, content):
     conclusion_text = re.sub(r'\\n', ' ', conclusion_text)
     write_handwritten_section("Conclusion:", conclusion_text)
     
-    # References Page (only once)
+    # References Page (only once) - start on new page with consistent spacing
     pdf.add_page()
     pdf.set_y(25)  # Increased from 20 to 25
     pdf.set_font("Handwriting", '', 16)  # Increased from 12 to 16

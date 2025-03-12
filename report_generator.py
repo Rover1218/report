@@ -1,6 +1,18 @@
 import google.generativeai as genai
 import json
 import re
+import requests
+import time
+import os
+from dotenv import load_dotenv
+from typing import Dict, Any, Optional
+
+# Load environment variables if not already loaded by app.py
+load_dotenv()
+
+# Get API keys from environment
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = "deepseek-r1-distill-llama-70b"
 
 def clean_json_string(json_str):
     """Clean a JSON string by removing or replacing invalid control characters"""
@@ -8,12 +20,106 @@ def clean_json_string(json_str):
     json_str = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F]', '', json_str)  # Remove control chars
     json_str = re.sub(r'\t', ' ', json_str)  # Replace tabs with spaces
     json_str = re.sub(r'\n +', '\n', json_str)  # Clean up indentation
-    json_str = re.sub(r'\\([^"])', r'\\\\\1', json_str)  # Fix single backslashes (not in quotes)
+    
+    # Fix backslash escaping issues - this addresses the "Invalid \escape" error
+    # Replace single backslashes with double backslashes, but not for already escaped ones
+    json_str = re.sub(r'(?<!\\)\\(?!["\\\/bfnrtu])', r'\\\\', json_str)
     
     # Remove trailing commas before closing braces/brackets:
     json_str = re.sub(r',(\s*[\}\]])', r'\1', json_str)
     
+    # Fix problematic citation markers like [1], [2], etc.
+    json_str = re.sub(r'\[\d+\]', '', json_str)
+    
+    # Fix any asterisks that aren't for markdown formatting
+    json_str = re.sub(r'(?<!\s)\*(?!\s)', '', json_str)
+    
+    # Replace double newlines with single space to avoid PDF formatting issues
+    json_str = re.sub(r'\\n\\n', ' ', json_str)
+    json_str = re.sub(r'\\n', ' ', json_str)
+    
     return json_str
+
+def verify_json_with_groq(json_text: str, groq_api_key: str) -> Optional[Dict[Any, Any]]:
+    """
+    Verify and clean JSON output using Groq API
+    
+    Args:
+        json_text (str): The potentially problematic JSON text
+        groq_api_key (str): Groq API key for accessing the service
+        
+    Returns:
+        Optional[Dict]: Cleaned JSON as dict if successful, None if failed
+    """
+    try:
+        # First try to parse it directly - if it works, no need to use API
+        parsed = json.loads(json_text)
+        return parsed
+    except json.JSONDecodeError:
+        # If direct parsing fails, try cleaning with Groq
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Create a prompt that asks Groq to fix the JSON
+        data = {
+            "model": GROQ_MODEL,  # Use the DeepSeek model specified in constants
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a JSON repair specialist. Fix the provided JSON to make it valid. Return ONLY the fixed JSON with no additional text or explanations."
+                },
+                {
+                    "role": "user",
+                    "content": f"Fix this JSON to make it valid:\n\n{json_text}"
+                }
+            ],
+            "temperature": 0.2,  # Low temperature for more deterministic output
+            "max_tokens": 8192
+        }
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                response = requests.post(url, headers=headers, json=data, timeout=30)
+                response.raise_for_status()
+                
+                # Extract the response content
+                response_data = response.json()
+                fixed_json_text = response_data['choices'][0]['message']['content'].strip()
+                
+                # Try to parse the fixed JSON
+                try:
+                    # Extract just the JSON part if there's any explanation text
+                    json_match = re.search(r'```(?:json)?\s*([\s\S]+?)\s*```', fixed_json_text)
+                    if json_match:
+                        fixed_json_text = json_match.group(1)
+                    else:
+                        # If no code block, try to find JSON between braces
+                        json_match = re.search(r'(\{[\s\S]+\})', fixed_json_text)
+                        if json_match:
+                            fixed_json_text = json_match.group(1)
+                    
+                    # Parse the extracted JSON
+                    parsed_json = json.loads(fixed_json_text)
+                    return parsed_json
+                except json.JSONDecodeError:
+                    # If still invalid, try again
+                    print(f"Attempt {attempt+1}: Groq fixed JSON still invalid. Retrying...")
+                    
+            except requests.RequestException as e:
+                print(f"Attempt {attempt+1}: Error calling Groq API: {str(e)}")
+                
+            # Wait before retrying
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                
+        # If we reach here, all attempts failed
+        print("Failed to fix JSON using Groq API. Falling back to manual cleaning.")
+        return None
 
 def generate_report(topic, num_pages, is_handwritten=False):
     """
@@ -77,6 +183,14 @@ def generate_report(topic, num_pages, is_handwritten=False):
     if num_pages >= 30:
         extra_instruction = "\n- Since the report spans a high page count, include extended analysis, elaborate descriptions, and additional subsections to cover all aspects comprehensively."
     
+    # Add explicit instruction to avoid citations like [1] and problematic characters
+    format_instruction = """
+    - DO NOT use citation markers like [1], [2], etc. in the text
+    - DO NOT use footnotes or endnotes
+    - Avoid formatting characters that might cause issues in PDF generation
+    - Write out references completely without any special formatting
+    """
+    
     # Adjust prompt to specifically request meaningful section titles with dynamic section count
     prompt = f"""
     Your task is to create a {"personal, handwritten-style" if is_handwritten else "detailed academic"} report on: "{topic}"
@@ -90,6 +204,7 @@ def generate_report(topic, num_pages, is_handwritten=False):
     - Use only ASCII characters - DO NOT use special symbols or unicode characters
     - {"Use " + content_style if is_handwritten else "MAKE SURE TO INCLUDE ACTUAL REFERENCES RELATED TO THE TOPIC"}
     - IMPORTANT: Give each section a SPECIFIC, UNIQUE, DESCRIPTIVE title related to its content (NO generic titles like "Section 1")
+    {format_instruction}
     
     Return ONLY a valid JSON object with this exact structure:
     {{
@@ -125,23 +240,66 @@ def generate_report(topic, num_pages, is_handwritten=False):
         cleaned_content = clean_json_string(raw_content)
         print(f"Cleaned JSON preview: {cleaned_content[:100]}...")
         
-        # Parse the cleaned JSON content
-        # Use a more robust approach with error detection
+        # Try to parse the cleaned JSON
+        report = None
+        verified_json = False  # Track if JSON was verified by Groq
+        
         try:
+            # Try direct parsing first
             report = json.loads(cleaned_content)
         except json.JSONDecodeError as je:
-            print(f"Error position: line {je.lineno}, col {je.colno}, pos {je.pos}")
-            # Get context of the error
-            error_context = cleaned_content[max(0, je.pos-20):min(len(cleaned_content), je.pos+20)]
-            print(f"Error context: '...{error_context}...'")
-            # Try a more aggressive cleanup
-            cleaned_content = re.sub(r'[^\x20-\x7E\n]', '', cleaned_content)  # Keep only printable ASCII
-            report = json.loads(cleaned_content)
+            print(f"Error parsing JSON: {str(je)}")
+            
+            # Try using Groq API for verification if direct parsing fails
+            report = verify_json_with_groq(cleaned_content, GROQ_API_KEY)
+            if report:
+                verified_json = True
+                print("JSON successfully verified and fixed by Groq API")
+            
+            # If Groq verification fails, try aggressive cleanup
+            if not report:
+                print("Attempting aggressive JSON cleanup...")
+                # Try more aggressive cleanup approach
+                cleaned_content = re.sub(r'[^\x20-\x7E\n]', '', cleaned_content)  # Remove non-printable chars
+                
+                # More robust backslash handling for aggressive cleanup
+                cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
+                cleaned_content = re.sub(r'\\([^"\\\/bfnrtu])', r'\1', cleaned_content)  # Fix escaped chars
+                
+                try:
+                    report = json.loads(cleaned_content)
+                    print("Aggressive cleanup successful.")
+                except json.JSONDecodeError as je2:
+                    print(f"Aggressive cleanup failed: {str(je2)}")
+                    print("Creating fallback report.")
         
-        print("JSON parsed successfully")
+        # Verify report structure is valid
+        if report is None:
+            raise ValueError("Failed to parse JSON content")
+        
+        # Clean content fields to remove problematic characters
+        if isinstance(report, dict):
+            # Clean introduction content
+            if "introduction" in report and isinstance(report["introduction"], str):
+                report["introduction"] = re.sub(r'\[\d+\]', '', report["introduction"])  # Remove citation markers
+                report["introduction"] = re.sub(r'\\n\\n', ' ', report["introduction"])  # Clean newlines
+                
+            # Clean section content
+            if "sections" in report and isinstance(report["sections"], list):
+                for section in report["sections"]:
+                    if "content" in section and isinstance(section["content"], str):
+                        section["content"] = re.sub(r'\[\d+\]', '', section["content"])  # Remove citation markers
+                        section["content"] = re.sub(r'\\n\\n', ' ', section["content"])  # Clean newlines
+            
+            # Clean conclusion
+            if "conclusion" in report and isinstance(report["conclusion"], str):
+                report["conclusion"] = re.sub(r'\[\d+\]', '', report["conclusion"])  # Remove citation markers
+                report["conclusion"] = re.sub(r'\\n\\n', ' ', report["conclusion"])  # Clean newlines
         
         # Add requested pages to the content
         report["requested_pages"] = num_pages
+        
+        print("JSON parsed successfully")
         
         # Validate report structure
         if "title" not in report:
