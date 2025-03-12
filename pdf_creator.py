@@ -118,8 +118,8 @@ def create_typed_pdf(title, content):
     pdf = PageLimitPDF(target_pages=requested_pages)
     
     # Set margins to absolute minimum to maximize content per page
-    pdf.set_margins(10, 10, 10)  # Further reduced margins
-    pdf.set_auto_page_break(True, margin=10)
+    pdf.set_margins(2, 2, 2)  # Further reduced margins
+    pdf.set_auto_page_break(True, margin=5)
     
     # First page - Start directly with Abstract (no title)
     pdf.add_page()
@@ -140,9 +140,7 @@ def create_typed_pdf(title, content):
     # Create abstract from the first part of the introduction
     intro_text = sanitize_for_pdf(str(content.get('introduction', '')))
     if intro_text:
-        abstract = ' '.join(intro_text.split()[:120])  # Increased from 100 to 120 words
-        if len(intro_text.split()) > 120:
-            abstract += "..."
+        abstract = ' '.join(intro_text.split()[:120])
     else:
         abstract = f"This report examines {title} and provides a comprehensive analysis of its key aspects."
     
@@ -161,7 +159,7 @@ def create_typed_pdf(title, content):
     pdf.set_font("Times", '', 16)  # Increased from 12 to 16
     
     # Add Introduction to TOC
-    pdf.cell(0, 5, "Introduction", 0, 1)
+    pdf.cell(0, 5, "Introduction .......... 2", 0, 1)
     
     # Add Sections to TOC
     sections = content.get('sections', [])
@@ -170,11 +168,11 @@ def create_typed_pdf(title, content):
         # If section title is too long, truncate it for TOC
         if len(section_title) > 70:
             section_title = section_title[:67] + "..."
-        pdf.cell(0, 5, section_title, 0, 1)
+        pdf.cell(0, 5, f"{section_title} .......... {i+3}", 0, 1)
     
     # Add Conclusion and References to TOC
-    pdf.cell(0, 5, "Conclusion", 0, 1)
-    pdf.cell(0, 5, "References", 0, 1)
+    pdf.cell(0, 5, f"Conclusion .......... {len(sections)+3}", 0, 1)
+    pdf.cell(0, 5, f"References .......... {len(sections)+4}", 0, 1)
     
     # Introduction with centered heading
     pdf.add_page()
@@ -204,7 +202,7 @@ def create_typed_pdf(title, content):
         # Cap introduction to around 15% of total content space
         max_chars = int(chars_per_page * content_pages * 0.15)
         if len(intro_text) > max_chars and max_chars > 0:
-            intro_text = intro_text[:max_chars] + "..."
+            intro_text = intro_text[:max_chars]
         pdf.multi_cell(0, 7, intro_text)  # Increased line spacing from 5 to 7
     else:
         pdf.multi_cell(0, 7, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
@@ -261,7 +259,7 @@ def create_typed_pdf(title, content):
                     center_text_on_page(pdf, section_text)
                 # Trim section content if needed to ensure balanced distribution
                 if len(section_text) > chars_per_section and chars_per_section > 0:
-                    section_text = section_text[:chars_per_section] + "..."
+                    section_text = section_text[:chars_per_section]
                 pdf.multi_cell(0, 9, section_text)  # Increased line spacing from 7 to 9
             else:
                 pdf.multi_cell(0, 7, f"This section discusses important aspects related to {section_title}.")
@@ -295,7 +293,7 @@ def create_typed_pdf(title, content):
     # Cap conclusion to around 15% of total content space
     max_chars = int(chars_per_page * content_pages * 0.15)
     if len(conclusion_text) > max_chars and max_chars > 0:
-        conclusion_text = conclusion_text[:max_chars] + "..."
+        conclusion_text = conclusion_text[:max_chars]
     
     pdf.multi_cell(0, 7, conclusion_text)  # Increased line spacing
     pdf.ln(2)
@@ -524,37 +522,34 @@ def create_handwritten_pdf(title, content):
     
     pdf = HandwrittenPDF(target_pages=requested_pages)
     
-    # Set minimal margins to fit more content
+    # Fix margins on every page:
     pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(True, margin=10)
-    
-    # Start directly with Abstract (no title page)
-    pdf.add_page()
+    pdf.set_auto_page_break(True, margin=5)
     
     # Use hc.ttf font for handwritten text instead of trying different fonts
     try:
         pdf.add_font('Handwriting', '', os.path.join('static', 'fonts', 'hc.ttf'), uni=True)
-        pdf.set_font('Handwriting', '', 18)
+        pdf.set_font('Handwriting', '', 22)
     except Exception as e:
         print(f"Error loading font: {e}")
         # Fallback to Courier
-        pdf.set_font('Courier', '', 18)
+        pdf.set_font('Courier', '', 22)
     
     intro_text = sanitize_for_pdf(content.get('introduction', '').replace('\n', ' ').strip())
     
     # Define 'abstract' from intro_text
     abstract = f"This report examines {title} and provides analysis of its key aspects."
     if intro_text:
-        abstract = ' '.join(intro_text.split()[:120])
-        if len(intro_text.split()) > 120:
-            abstract += "..."
+        abstract = intro_text
     
     pdf.add_page()
     pdf.set_y(20)
-    pdf.set_font_size(16)
+    # Replace direct font_size(16) with Handwriting 22:
+    pdf.set_font("Handwriting", '', 22)
     pdf.cell(0, 10, "Abstract", 0, 1, 'C')
     pdf.ln(5)
-    pdf.set_font_size(10)
+    # Replace direct font_size(10) with Handwriting 14:
+    pdf.set_font("Handwriting", '', 14)
     pdf.multi_cell(0, 8, abstract)
     
     # Table of Contents (Second page)
@@ -562,16 +557,26 @@ def create_handwritten_pdf(title, content):
     pdf.set_font("Handwriting", '', 14)
     pdf.cell(0, 10, "Contents:", 0, 1, 'L')
  
-    pdf.set_font("Handwriting", '', 12)
+    pdf.set_font("Handwriting", '', 14)
     pdf.ln(5)
-    pdf.cell(0, 8, "Introduction", 0, 1, 'L')
-    for section in content['sections']:
+
+    # Introduction:
+    pdf.cell(100, 8, "Introduction", 0, 0, 'L')
+    pdf.cell(0, 8, "3", 0, 1, 'R')
+
+    # Sections:
+    for i, section in enumerate(content['sections']):
         section_title = sanitize_for_pdf(section['title'])
-        if len(section_title) > 50:
-            section_title = section_title[:47] + "..."
-        pdf.cell(0, 8, section_title, 0, 1, 'L')
-    pdf.cell(0, 8, "Conclusion", 0, 1, 'L')
-    pdf.cell(0, 8, "References", 0, 1, 'L')
+        pdf.cell(100, 8, section_title, 0, 0, 'L')
+        pdf.cell(0, 8, f"{i+4}", 0, 1, 'R')
+
+    # Conclusion:
+    pdf.cell(100, 8, "Conclusion", 0, 0, 'L')
+    pdf.cell(0, 8, str(len(content['sections']) + 4), 0, 1, 'R')
+
+    # References:
+    pdf.cell(100, 8, "References", 0, 0, 'L')
+    pdf.cell(0, 8, str(len(content['sections']) + 5), 0, 1, 'R')
     
     def write_handwritten_section(title, content_text, is_main_section=False):
         if not title:
@@ -579,17 +584,16 @@ def create_handwritten_pdf(title, content):
         pdf.add_page()
         # Reset vertical position near top
         pdf.set_y(20)
-        pdf.set_font("Handwriting", '', 18)
+        pdf.set_font("Handwriting", '', 22)
         pdf.cell(0, 10, title, 0, 1, 'C')
         pdf.ln(5)
-        pdf.set_font("Handwriting", '', 12)
+        pdf.set_font("Handwriting", '', 14)
         pdf.multi_cell(0, 8, content_text)
 
     # Introduction - limit to 15% of content space
     intro_words = intro_text.split()
     intro_limit = int(words_per_page * content_pages * 0.15)
-    if len(intro_words) > intro_limit:
-        intro_text = ' '.join(intro_words[:intro_limit]) + "..."
+    intro_text = ' '.join(intro_words) 
     
     write_handwritten_section("Introduction:", intro_text)
     
@@ -607,8 +611,7 @@ def create_handwritten_pdf(title, content):
     
     conclusion_words = conclusion_text.split()
     conclusion_limit = int(words_per_page * content_pages * 0.15)
-    if len(conclusion_words) > conclusion_limit:
-        conclusion_text = ' '.join(conclusion_words[:conclusion_limit]) + "..."
+    conclusion_text = ' '.join(conclusion_words)
     
     write_handwritten_section("Conclusion:", conclusion_text)
     

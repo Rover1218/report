@@ -9,6 +9,10 @@ def clean_json_string(json_str):
     json_str = re.sub(r'\t', ' ', json_str)  # Replace tabs with spaces
     json_str = re.sub(r'\n +', '\n', json_str)  # Clean up indentation
     json_str = re.sub(r'\\([^"])', r'\\\\\1', json_str)  # Fix single backslashes (not in quotes)
+    
+    # Remove trailing commas before closing braces/brackets:
+    json_str = re.sub(r',(\s*[\}\]])', r'\1', json_str)
+    
     return json_str
 
 def generate_report(topic, num_pages, is_handwritten=False):
@@ -33,7 +37,7 @@ def generate_report(topic, num_pages, is_handwritten=False):
     )
     
     # Calculate word count based on pages (500 words per page)
-    word_count = num_pages * 500
+    word_count = num_pages * 600
     
     # Determine optimal section count based on page count
     section_count = min(5, max(3, num_pages))
