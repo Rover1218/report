@@ -79,6 +79,23 @@ def center_text_on_page(pdf, text, space_factor=0.8):
         y_offset = (page_height - text_height) / 2
         pdf.set_y(10 + y_offset)
 
+class PageLimitPDF(FPDF):
+    """Custom PDF class that monitors page count"""
+    def __init__(self, target_pages=None):
+        super().__init__()
+        self.target_pages = target_pages
+        self.current_page = 0
+        
+    def add_page(self, orientation='', format='', same=False):
+        # Fix the arguments to match FPDF's expected parameters
+        if orientation and not format and not same:
+            super().add_page(orientation)
+        elif orientation and format and not same:
+            super().add_page(orientation, format)
+        else:
+            super().add_page()
+        self.current_page += 1
+
 def create_typed_pdf(title, content):
     """Create a professionally formatted PDF report."""
     pdf = PageLimitPDF(target_pages=content.get('requested_pages', 3))
@@ -93,23 +110,6 @@ def create_typed_pdf(title, content):
                 content[key] = sanitize_for_pdf(content[key])
             elif isinstance(content[key], list):
                 content[key] = [sanitize_for_pdf(item) if isinstance(item, str) else item for item in content[key]]
-    
-    class PageLimitPDF(FPDF):
-        """Custom PDF class that monitors page count"""
-        def __init__(self, target_pages=None):
-            super().__init__()
-            self.target_pages = target_pages
-            self.current_page = 0
-            
-        def add_page(self, orientation='', format='', same=False):
-            # Fix the arguments to match FPDF's expected parameters
-            if orientation and not format and not same:
-                super().add_page(orientation)
-            elif orientation and format and not same:
-                super().add_page(orientation, format)
-            else:
-                super().add_page()
-            self.current_page += 1
     
     # Get requested page count from content
     requested_pages = content.get('requested_pages', 3)  # Default to 3 if not specified
@@ -471,6 +471,54 @@ def analyze_handwriting(image_path):
             "baseline_variation": random.uniform(0, 2),
         }
 
+class HandwrittenPDF(FPDF):
+    # Create a custom PDF class that handles text wrapping and rotation
+    def __init__(self, target_pages=None):
+        super().__init__()
+        self.target_pages = target_pages
+        self.current_page = 0
+        
+    def add_page(self, orientation='', format='', same=False):
+        # Fix the arguments to match FPDF's expected parameters
+        if orientation and not format and not same:
+            super().add_page(orientation)
+        elif orientation and format and not same:
+            super().add_page(orientation, format)
+        else:
+            super().add_page()
+        self.current_page += 1
+        
+    def rotated_text(self, x, y, text, angle, size_factor=1.0):
+        # Variation for more natural handwriting
+        if not text or text.isspace():
+            return
+
+        current_size = self.font_size * size_factor
+        self.set_font_size(current_size)
+
+        # Ensure x and y are within safe margins
+        safe_margin = 10
+        x = max(safe_margin, x)
+        y = max(safe_margin, y)
+
+        # Check text width and adjust x coordinate if necessary
+        text_width = self.get_string_width(text)
+        if x + text_width > self.w - safe_margin:
+            x = self.w - safe_margin - text_width
+        if y > self.h - safe_margin:
+            y = self.h - safe_margin
+
+        angle_rad = (angle * 0.3) * math.pi / 180  # Reduce angle swing
+        self.rotate(angle_rad, x, y)
+        self.text(x, y, text)
+        self.rotate(0)
+
+        # Reset font size to default value
+        self.set_font_size(self.font_size / size_factor)
+        # Reduce random wobble to keep words on page
+        x_wobble = x + random.uniform(-0.2, 0.2)
+        y_wobble = y + random.uniform(-0.2, 0.2)
+
 def create_handwritten_pdf(title, content):
     """Create a PDF that simulates handwritten notes using styling."""
     # Remove disk operations
@@ -491,57 +539,6 @@ def create_handwritten_pdf(title, content):
     words_per_page = 500
     requested_pages = content.get('requested_pages', 3)
     content_pages = max(requested_pages - 3, 1)
-    
-    class HandwrittenPDF(FPDF):
-        # Create a custom PDF class that handles text wrapping and rotation
-        def __init__(self, target_pages=None):
-            super().__init__()
-            self.target_pages = target_pages
-            self.current_page = 0
-            
-        def add_page(self, orientation='', format='', same=False):
-            # Fix the arguments to match FPDF's expected parameters
-            if orientation and not format and not same:
-                super().add_page(orientation)
-            elif orientation and format and not same:
-                super().add_page(orientation, format)
-            else:
-                super().add_page()
-            self.current_page += 1
-            
-        def rotated_text(self, x, y, text, angle, size_factor=1.0):
-            # Variation for more natural handwriting
-            if not text or text.isspace():
-                return
-
-            current_size = self.font_size * size_factor
-            self.set_font_size(current_size)
-
-            # Ensure x and y are within safe margins
-            safe_margin = 10
-            x = max(safe_margin, x)
-            y = max(safe_margin, y)
-
-            # Check text width and adjust x coordinate if necessary
-            text_width = self.get_string_width(text)
-            if x + text_width > self.w - safe_margin:
-                x = self.w - safe_margin - text_width
-            if y > self.h - safe_margin:
-                y = self.h - safe_margin
-
-            angle_rad = (angle * 0.3) * math.pi / 180  # Reduce angle swing
-            self.rotate(angle_rad, x, y)
-            self.text(x, y, text)
-            self.rotate(0)
-
-            # Reset font size to default value
-            self.set_font_size(self.font_size / size_factor)
-            # Reduce random wobble to keep words on page
-            x_wobble = x + random.uniform(-0.2, 0.2)
-            y_wobble = y + random.uniform(-0.2, 0.2)
-    
-    # Get requested page count from content
-    requested_pages = content.get('requested_pages', 3)  # Default to 3 if not specified
     
     pdf = HandwrittenPDF(target_pages=requested_pages)
     
