@@ -7,6 +7,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from report_generator import generate_report
 from pdf_creator import create_typed_pdf, create_handwritten_pdf
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -53,17 +54,27 @@ def generate():
             
         content['requested_pages'] = num_pages
 
-        # Create the PDF
+        # Create the PDF in memory
         if report_type == 'typed':
-            pdf_path = create_typed_pdf(topic, content)
+            pdf_content = create_typed_pdf(topic, content)
         else:
-            pdf_path = create_handwritten_pdf(topic, content)
+            pdf_content = create_handwritten_pdf(topic, content)
         
-        # Convert the generated pdf_path to a URL accessible by the browser:
-        pdf_url = "/" + pdf_path.replace("\\", "/")  
+        # Create a BytesIO object from the PDF content
+        pdf_buffer = BytesIO(pdf_content)
+        pdf_buffer.seek(0)
         
-        # Render a loader page that polls for the PDF and then redirects.
-        return render_template('loading_pdf.html', pdf_url=pdf_url)
+        # Generate a safe filename
+        safe_filename = secure_filename(f"{topic.replace(' ', '_')}_report.pdf")
+        
+        # Return the PDF directly
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=safe_filename
+        )
+
     except Exception as e:
         print(f"Error: {str(e)}")
         print(traceback.format_exc())

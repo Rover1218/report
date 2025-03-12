@@ -1,7 +1,7 @@
-static/reports/*
-static/uploads/*
-venv
+static/
+venv/
 .env
-__pycache__
+__pycache__/
 *.pyc
 *.pdf
+*.ttf

@@ -81,8 +81,7 @@ def center_text_on_page(pdf, text, space_factor=0.8):
 
 def create_typed_pdf(title, content):
     """Create a professionally formatted PDF report."""
-    output_path = os.path.join('static', 'reports', f"{title.replace(' ', '_')}_report.pdf")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    pdf = PageLimitPDF(target_pages=content.get('requested_pages', 3))
     
     # Sanitize the title and content
     title = sanitize_for_pdf(title)
@@ -422,10 +421,8 @@ def create_typed_pdf(title, content):
     pdf.set_font("Times", 'I', 14)
     pdf.cell(0, 10, "Thank you", 0, 1, 'C')  # Simplified to just "Thank you"
     
-    # Save the PDF
-    pdf.output(output_path)
-    
-    return output_path
+    # Instead of saving to disk, return the PDF content
+    return pdf.output(dest='S').encode('latin-1')  # Return PDF as bytes
 
 # Function to analyze handwriting style from an image
 def analyze_handwriting(image_path):
@@ -476,8 +473,8 @@ def analyze_handwriting(image_path):
 
 def create_handwritten_pdf(title, content):
     """Create a PDF that simulates handwritten notes using styling."""
-    output_path = os.path.join('static', 'reports', f"{title.replace(' ', '_')}_handwritten.pdf")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Remove disk operations
+    pdf = HandwrittenPDF(target_pages=content.get('requested_pages', 3))
     
     # Sanitize the title and content
     title = sanitize_for_pdf(title)
@@ -896,7 +893,5 @@ def create_handwritten_pdf(title, content):
     pdf.set_font("Handwriting", '', 14)  # Increased from 12 to 14
     pdf.cell(0, 10, "Thank you", 0, 1, 'C')
     
-    # Save the PDF
-    pdf.output(output_path)
-    
-    return output_path
+    # Instead of saving to disk, return the PDF content
+    return pdf.output(dest='S').encode('latin-1')  # Return PDF as bytes
