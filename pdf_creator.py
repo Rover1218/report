@@ -116,10 +116,9 @@ def create_typed_pdf(title, content):
     requested_pages = content.get('requested_pages', 3)  # Default to 3 if not specified
     
     pdf = PageLimitPDF(target_pages=requested_pages)
-    
-    # Set margins to absolute minimum to maximize content per page
-    pdf.set_margins(2, 2, 2)  # Further reduced margins
-    pdf.set_auto_page_break(True, margin=5)
+    # Fix margins in each page
+    pdf.set_margins(20, 20, 20)
+    pdf.set_auto_page_break(True, margin=20)
     
     # First page - Start directly with Abstract (no title)
     pdf.add_page()
@@ -147,6 +146,8 @@ def create_typed_pdf(title, content):
     pdf.multi_cell(0, 7, abstract)  # Increased line spacing from 5 to 7
     pdf.ln(2)
     
+    # Move Table of Contents to a new page
+    pdf.add_page()
     pdf.set_font("Times", 'B', 20)
     pdf.cell(0, 12, "Table of Contents", 0, 1, 'C')
     pdf.ln(6)  # More space after heading
@@ -199,10 +200,6 @@ def create_typed_pdf(title, content):
         # Remove \n\n that might exist in the text 
         intro_text = re.sub(r'\\n\\n', ' ', intro_text)
         intro_text = re.sub(r'\\n', ' ', intro_text)
-        # Cap introduction to around 15% of total content space
-        max_chars = int(chars_per_page * content_pages * 0.15)
-        if len(intro_text) > max_chars and max_chars > 0:
-            intro_text = intro_text[:max_chars]
         pdf.multi_cell(0, 7, intro_text)  # Increased line spacing from 5 to 7
     else:
         pdf.multi_cell(0, 7, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
@@ -257,9 +254,6 @@ def create_typed_pdf(title, content):
                 # Center text if it's a short section
                 if len(section_text) < chars_per_section * 0.5:
                     center_text_on_page(pdf, section_text)
-                # Trim section content if needed to ensure balanced distribution
-                if len(section_text) > chars_per_section and chars_per_section > 0:
-                    section_text = section_text[:chars_per_section]
                 pdf.multi_cell(0, 9, section_text)  # Increased line spacing from 7 to 9
             else:
                 pdf.multi_cell(0, 7, f"This section discusses important aspects related to {section_title}.")
@@ -290,11 +284,6 @@ def create_typed_pdf(title, content):
         conclusion_text = f"In conclusion, {title} represents an important area of study. This report has highlighted key aspects and considerations related to the topic."
     
     # Print conclusion with proper word wrapping
-    # Cap conclusion to around 15% of total content space
-    max_chars = int(chars_per_page * content_pages * 0.15)
-    if len(conclusion_text) > max_chars and max_chars > 0:
-        conclusion_text = conclusion_text[:max_chars]
-    
     pdf.multi_cell(0, 7, conclusion_text)  # Increased line spacing
     pdf.ln(2)
     
@@ -592,7 +581,6 @@ def create_handwritten_pdf(title, content):
 
     # Introduction - limit to 15% of content space
     intro_words = intro_text.split()
-    intro_limit = int(words_per_page * content_pages * 0.15)
     intro_text = ' '.join(intro_words) 
     
     write_handwritten_section("Introduction:", intro_text)
@@ -610,7 +598,6 @@ def create_handwritten_pdf(title, content):
         conclusion_text = f"In conclusion, {title} represents an important area of study. This report has highlighted key aspects and considerations related to the topic."
     
     conclusion_words = conclusion_text.split()
-    conclusion_limit = int(words_per_page * content_pages * 0.15)
     conclusion_text = ' '.join(conclusion_words)
     
     write_handwritten_section("Conclusion:", conclusion_text)

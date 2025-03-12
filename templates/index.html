@@ -60,6 +60,29 @@
             margin-top: 10px;
             display: none;
         }
+
+        /* Simple spinner styling */
+        #loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            margin: 0 auto;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #ccc;
+            border-top: 4px solid #555;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
@@ -79,7 +102,8 @@
         {% endif %}
         {% endwith %}
 
-        <form action="/generate" method="post" id="reportForm" target="_blank" enctype="multipart/form-data">
+        <form action="/generate" method="post" id="reportForm" target="_blank" enctype="multipart/form-data"
+            onsubmit="showLoader()">
             <div class="mb-3">
                 <label for="topic" class="form-label">Report Topic</label>
                 <input type="text" class="form-control" id="topic" name="topic" required
@@ -127,6 +151,11 @@
                 <span class="visually-hidden">Loading...</span>
             </div>
             <p class="mt-2">Generating your report... This may take a few minutes.</p>
+        </div>
+
+        <div id="loader">
+            <div class="spinner"></div>
+            <p>Generating your report, please wait...</p>
         </div>
     </div>
 
@@ -195,6 +224,10 @@
             // Prevent the original form from submitting
             event.preventDefault();
         });
+
+        function showLoader() {
+            document.getElementById('loader').style.display = 'block';
+        }
     </script>
 
     <script>
