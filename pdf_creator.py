@@ -5,7 +5,7 @@ import math
 import re
 import time
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 def sanitize_for_pdf(text):
     """Replace non-Latin1 characters with ASCII equivalents to avoid encoding errors"""
@@ -133,6 +133,100 @@ class HandwrittenPDF(PDF):
         # Reduce random wobble to keep words on page
         x_wobble = x + random.uniform(-0.2, 0.2)
         y_wobble = y + random.uniform(-0.2, 0.2)
+    
+    def add_page(self, orientation='', format='', same=False):
+        # Override add_page to add scanned paper effect to each page
+        if orientation and not format and not same:
+            super().add_page(orientation)
+        elif orientation and format and not same:
+            super().add_page(orientation, format)
+        else:
+            super().add_page()
+        
+        # Add scanned paper effect to the current page
+        self.add_scanned_paper_effect()
+        self.current_page += 1
+    
+    def add_scanned_paper_effect(self):
+        """Add a realistic scanned paper effect with texture and noise"""
+        page_width = self.w
+        page_height = self.h
+        
+        # 1. Background gradient - slightly yellowish or grayish like old paper
+        steps = 60
+        for i in range(steps):
+            # Vary from light cream/gray to slightly darker
+            r = 245 - int(i * 0.3)  # Very slight yellow/cream tint
+            g = 242 - int(i * 0.4)
+            b = 235 - int(i * 0.5)  # Slightly more blue reduction for cream look
+            self.set_fill_color(r, g, b)
+            y = i * (page_height / steps)
+            self.rect(0, y, page_width, (page_height / steps) + 0.5, 'F')
+            
+        # 2. Add random dots throughout the page (like paper texture/scanner noise)
+        for _ in range(2000):  # More dots for realistic noise
+            x = random.uniform(0, page_width)
+            y = random.uniform(0, page_height)
+            size = random.uniform(0.1, 0.3)  # Smaller dots
+            
+            # Vary the darkness of dots
+            gray = random.randint(180, 220)
+            self.set_fill_color(gray, gray, gray)
+            self.rect(x, y, size, size, 'F')
+        
+        # 3. Add a few longer scanner lines (like artifacts)
+        for _ in range(10):
+            y_pos = random.uniform(0, page_height)
+            thickness = random.uniform(0.1, 0.3)  # Thinner lines
+            length = random.uniform(page_width * 0.3, page_width * 0.9)
+            x_pos = random.uniform(0, page_width - length)
+            
+            # Vary the darkness of lines
+            gray = random.randint(190, 220)
+            self.set_fill_color(gray, gray, gray)
+            self.rect(x_pos, y_pos, length, thickness, 'F')
+        
+        # 4. Add fold marks or creases (vertical and horizontal)
+        # Horizontal fold
+        fold_y = random.uniform(page_height*0.4, page_height*0.6)
+        for x in range(0, int(page_width), 1):
+            # Slight variation in the fold line
+            y_variation = fold_y + random.uniform(-0.5, 0.5)
+            intensity = random.randint(180, 210)
+            self.set_fill_color(intensity, intensity, intensity)
+            self.rect(x, y_variation, 1, random.uniform(0.1, 0.4), 'F')
+        
+        # Vertical fold (less prominent)
+        if random.random() > 0.5:  # 50% chance of having a vertical fold
+            fold_x = random.uniform(page_width*0.3, page_width*0.7)
+            for y in range(0, int(page_height), 2):
+                x_variation = fold_x + random.uniform(-0.3, 0.3)
+                intensity = random.randint(190, 220)
+                self.set_fill_color(intensity, intensity, intensity)
+                self.rect(x_variation, y, random.uniform(0.1, 0.3), 1, 'F')
+        
+        # 5. Darker edges (like shadow from scanner)
+        edge_width = 15
+        for i in range(edge_width):
+            # Left edge shadow
+            shadow = 220 - int((edge_width - i) * 1.5)  # Darker at the edge
+            self.set_fill_color(shadow, shadow, shadow)
+            self.rect(i*0.5, 0, 0.5, page_height, 'F')
+            
+            # Right edge shadow
+            self.rect(page_width - (i*0.5) - 0.5, 0, 0.5, page_height, 'F')
+            
+            # Top edge shadow
+            self.rect(0, i*0.5, page_width, 0.5, 'F')
+            
+            # Bottom edge shadow
+            self.rect(0, page_height - (i*0.5) - 0.5, page_width, 0.5, 'F')
+        
+        # Reset fill color
+        self.set_fill_color(255, 255, 255)
+        
+        # Make text darker by setting text color to deep black
+        self.set_text_color(0, 0, 0)
 
 def initialize_pdf_with_font(pdf_class, target_pages):
     """Initialize PDF with proper font handling"""

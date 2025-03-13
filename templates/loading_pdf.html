@@ -225,7 +225,7 @@
             setTimeout(() => {
                 document.getElementById('step3').classList.add('completed');
                 document.getElementById('step4').classList.add('active');
-                document.getElementById('statusText').textContent = "Almost done! Preparing for download...";
+                document.getElementById('statusText').textContent = "Almost done! Preparing for viewing...";
             }, 20000);
         }
 
@@ -245,7 +245,7 @@
                             step.classList.add('active');
                             step.classList.add('completed');
                         });
-                        document.getElementById('statusText').textContent = "Report complete! Redirecting...";
+                        document.getElementById('statusText').textContent = "Report complete! Opening in browser...";
                         document.getElementById('progressBar').style.width = '100%';
 
                         // Redirect after a brief pause to show completion
