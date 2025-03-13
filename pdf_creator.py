@@ -4,8 +4,9 @@ from fpdf import FPDF
 import math
 import re
 import time
-import numpy as np
+import numpy as np  # Fixed: corrected "import numpy np" to "import numpy as np"
 from PIL import Image, ImageDraw, ImageFilter
+import textwrap
 
 def sanitize_for_pdf(text):
     """Replace non-Latin1 characters with ASCII equivalents to avoid encoding errors"""
@@ -104,35 +105,58 @@ class PageLimitPDF(PDF):
 class HandwrittenPDF(PDF):
     """Custom PDF class that handles text wrapping and rotation"""
     def rotated_text(self, x, y, text, angle, size_factor=1.0):
-        # Variation for more natural handwriting
         if not text or text.isspace():
             return
 
         current_size = self.font_size * size_factor
         self.set_font_size(current_size)
 
-        # Ensure x and y are within safe margins
         safe_margin = 10
         x = max(safe_margin, x)
         y = max(safe_margin, y)
 
-        # Check text width and adjust x coordinate if necessary
-        text_width = self.get_string_width(text)
-        if x + text_width > self.w - safe_margin:
-            x = self.w - safe_margin - text_width
-        if y > self.h - safe_margin:
-            y = self.h - safe_margin
+        angle_rad = (angle * 0.3) * math.pi / 180  # Slightly reduce overall angle
+        current_x = x
+        current_y = y
 
-        angle_rad = (angle * 0.3) * math.pi / 180  # Reduce angle swing
-        self.rotate(angle_rad, x, y)
-        self.text(x, y, text)
-        self.rotate(0)
+        for i, char in enumerate(text):
+            if char == ' ':
+                # Uneven spacing
+                space_w = self.get_string_width(' ') * random.uniform(0.8, 1.3)
+                current_x += space_w
+                continue
 
-        # Reset font size to default value
+            # Random letter size
+            char_size_factor = random.uniform(0.85, 1.15)
+            self.set_font_size(current_size * char_size_factor)
+
+            # Random offset
+            x_offset = random.uniform(-0.3, 0.3)
+            y_offset = random.uniform(-0.5, 0.5)
+
+            # Slightly vary angle per character
+            char_angle = angle_rad + random.uniform(-2, 2) * math.pi / 180
+
+            # Occasional brush cut
+            if random.random() < 0.05:
+                self.set_draw_color(255, 255, 255)
+                cut_x = current_x + random.uniform(0, self.get_string_width(char))
+                cut_y = current_y + random.uniform(-1, 1)
+                self.rotate(random.uniform(0, math.pi), cut_x, cut_y)
+                self.line(cut_x, cut_y, cut_x + random.uniform(0.5, 1.5), cut_y)
+                self.rotate(0)
+                self.set_draw_color(0, 0, 0)
+
+            # Draw character
+            self.rotate(char_angle, current_x + x_offset, current_y + y_offset)
+            self.text(current_x + x_offset, current_y + y_offset, char)
+            self.rotate(0)
+
+            # Move x for next character
+            char_width = self.get_string_width(char)
+            current_x += char_width * random.uniform(0.9, 1.1)
+
         self.set_font_size(self.font_size / size_factor)
-        # Reduce random wobble to keep words on page
-        x_wobble = x + random.uniform(-0.2, 0.2)
-        y_wobble = y + random.uniform(-0.2, 0.2)
     
     def add_page(self, orientation='', format='', same=False):
         # Override add_page to add scanned paper effect to each page
@@ -452,8 +476,7 @@ def create_typed_pdf(title, content):
     pdf.line(30, pdf.get_y()-1, pdf.w-30, pdf.get_y()-1)
     pdf.ln(6)  # More space after heading line
     
-    pdf.set_font("Times", '', 18)
-    
+    pdf.set_font("Times", '', 18)  # Increased from 16
     # Create completely different abstract that's not derived from introduction
     intro_text = sanitize_for_pdf(str(content.get('introduction', '')))
     
@@ -480,7 +503,7 @@ def create_typed_pdf(title, content):
     
     # Use a smaller font size to fit more content in the abstract section
     pdf.set_font("Times", '', 16)  # Reduced from 18 to 16 to fit more content
-    pdf.multi_cell(0, 8, abstract)  # Reduced line spacing from 9 to 8
+    pdf.multi_cell(0, 10, abstract)  # Increased line spacing from 8 to 10
     pdf.ln(2)
     
     # Move Table of Contents to a new page
@@ -560,7 +583,7 @@ def create_typed_pdf(title, content):
         # Remove \n\n that might exist in the text 
         intro_text = re.sub(r'\\n\\n', ' ', intro_text)
         intro_text = re.sub(r'\\n', ' ', intro_text)
-        pdf.multi_cell(0, 9, intro_text)  # Increased line spacing from 7 to 9
+        pdf.multi_cell(0, 10, intro_text)  # Increased line spacing from 9 to 10
     else:
         pdf.multi_cell(0, 9, f"This report explores the topic of {title} in detail. It aims to provide a comprehensive overview of key aspects related to this subject.")
     
@@ -814,13 +837,13 @@ def create_handwritten_pdf(title, content):
     pdf = HandwrittenPDF(target_pages=requested_pages)
     
     # Fix margins on every page - increase margins for better heading containment
-    pdf.set_margins(15, 15, 15)  # Increased from 10,10,10 to 15,15,15
+    pdf.set_margins(10, 10, 10)  # Reduced margins
     pdf.set_auto_page_break(True, margin=10)  # Increased from 5 to 10
     
     # Use hc.ttf font for handwritten text instead of trying different fonts
     try:
         pdf.add_font('Handwriting', '', os.path.join('static', 'fonts', 'hc.ttf'), uni=True)
-        pdf.set_font('Handwriting', '', 22)
+        pdf.set_font('Handwriting', '', 18)  # Reduced from 22 for headings
     except Exception as e:
         print(f"Error loading font: {e}")
         # Fallback to Courier
@@ -876,15 +899,17 @@ def create_handwritten_pdf(title, content):
             pdf.set_font('Courier', '', 16)
     
     pdf.cell(0, 10, "Abstract", 0, 1, 'C')
-    pdf.ln(5)
+    pdf.ln(10)  # increased gap below heading
     
     # Again use safe font selection
     try:
-        pdf.set_font("Handwriting", '', 14)
+        pdf.set_font("Handwriting", '', 18)  # Increased from 14 for abstract body text
     except Exception:
-        pdf.set_font('Courier', '', 12)
+        pdf.set_font('Courier', '', 14)
     
-    pdf.multi_cell(0, 10, abstract)  # changed line height from 8 to 10
+    # Replace rotated_text with multi_cell to reliably render abstract text
+    pdf.multi_cell(0, 12, abstract)
+    pdf.ln(10)
     
     # Table of Contents (Second page) - modified for handwritten PDF
     pdf.add_page()
@@ -978,14 +1003,70 @@ def create_handwritten_pdf(title, content):
             pdf.cell(0, 10, title, 0, 1, 'C')
         
         # Add extra space after title
-        pdf.ln(5)
-        pdf.set_font("Handwriting", '', 14)
+        pdf.ln(10)
+        pdf.set_font("Handwriting", '', 16)  # Slightly smaller for body
         
         # Clean content text to remove all \n\n and \n
         content_text = re.sub(r'\\n\\n', ' ', content_text)
         content_text = re.sub(r'\\n', ' ', content_text)
         
-        pdf.multi_cell(0, 10, content_text)
+        # Instead of multi_cell, add characters with random offsets
+        lines = content_text.split('\n') if '\n' in content_text else [content_text]
+
+        left_margin = 15
+        right_margin = pdf.w - 15
+
+        for line in lines:
+            x_start = pdf.get_x()
+            y_start = pdf.get_y()
+            current_x = x_start
+            current_y = y_start
+
+            for ch in line:
+                if ch == ' ':
+                    # Random space width
+                    space_width = pdf.get_string_width(' ') * random.uniform(0.8, 1.3)
+                    current_x += space_width
+                    continue
+
+                # Random character size
+                base_size = 14
+                char_size = base_size * random.uniform(0.85, 1.15)
+                pdf.set_font_size(char_size)
+
+                # Occasional brush cut
+                if random.random() < 0.05:
+                    pdf.set_draw_color(255, 255, 255)
+                    cut_x = current_x + random.uniform(0, pdf.get_string_width(ch))
+                    cut_y = current_y + random.uniform(-1, 1)
+                    angle = random.uniform(0, 180)
+                    pdf.rotate(angle, cut_x, cut_y)
+                    pdf.line(cut_x, cut_y, cut_x + random.uniform(0.5, 1.5), cut_y)
+                    pdf.rotate(0)
+                    pdf.set_draw_color(0, 0, 0)
+
+                # Random angle and position offset
+                angle = random.uniform(-2, 2)
+                x_offset = random.uniform(-0.5, 0.5)
+                y_offset = random.uniform(-0.5, 0.5)
+                pdf.rotate(angle, current_x + x_offset, current_y + y_offset)
+                pdf.text(current_x + x_offset, current_y + y_offset, ch)
+                pdf.rotate(0)
+
+                char_width = pdf.get_string_width(ch)
+                current_x += char_width * random.uniform(0.9, 1.1)
+
+                if current_x + x_offset + char_width > right_margin:
+                    current_x = left_margin
+                    current_y += 8  # line spacing
+                    pdf.set_y(current_y)
+                    pdf.set_x(current_x)
+
+                if current_x < left_margin:
+                    current_x = left_margin
+
+            pdf.set_y(current_y + 10)
+            pdf.set_x(x_start)
 
     # Introduction
     intro_words = intro_text.split()
@@ -1105,7 +1186,7 @@ def create_handwritten_pdf(title, content):
     pdf.set_y(25)  # Increased from 20 to 25
     pdf.set_font("Handwriting", '', 16)  # Increased from 12 to 16
     pdf.cell(0, 10, "References", 0, 1, 'C')
-    pdf.ln(5)
+    pdf.ln(10)  # increased gap below heading
     
     pdf.set_font("Handwriting", '', 12)  # Increased from 10 to 12
     
