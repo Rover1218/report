@@ -148,85 +148,250 @@ class HandwrittenPDF(PDF):
         self.current_page += 1
     
     def add_scanned_paper_effect(self):
-        """Add a realistic scanned paper effect with texture and noise"""
+        """Create a realistic scanned paper effect with highly randomized page styles"""
         page_width = self.w
         page_height = self.h
         
-        # 1. Background gradient - slightly yellowish or grayish like old paper
-        steps = 60
-        for i in range(steps):
-            # Vary from light cream/gray to slightly darker
-            r = 245 - int(i * 0.3)  # Very slight yellow/cream tint
-            g = 242 - int(i * 0.4)
-            b = 235 - int(i * 0.5)  # Slightly more blue reduction for cream look
-            self.set_fill_color(r, g, b)
-            y = i * (page_height / steps)
-            self.rect(0, y, page_width, (page_height / steps) + 0.5, 'F')
+        # 1. Pure white background base layer
+        self.set_fill_color(255, 255, 255)
+        self.rect(0, 0, page_width, page_height, 'F')
+        
+        # 2. Determine the random page style for this specific page
+        page_style = random.choice([
+            "clean",       # Almost no artifacts
+            "light_dots",  # Light paper texture with few dots
+            "heavy_dots",  # Heavy paper texture with many dots
+            "lines_only",  # Mostly scan lines, few dots
+            "mixed",       # Both dots and lines in medium amount
+            "aged"         # Yellowed with heavier texture
+        ])
+        
+        # 3. Subtle background color/tint based on page style
+        if page_style == "aged":
+            # Slightly yellow/aged paper
+            self.set_fill_color(252, 250, 242)
+            self.rect(0, 0, page_width, page_height, 'F')
             
-        # 2. Add random dots throughout the page (like paper texture/scanner noise)
-        for _ in range(2000):  # More dots for realistic noise
+        # Always add some form of gradient, but vary the intensity
+        gradient_steps = random.randint(70, 100)
+        gradient_intensity = {
+            "clean": 0.03,
+            "light_dots": 0.05,
+            "heavy_dots": 0.07,
+            "lines_only": 0.06,
+            "mixed": 0.08,
+            "aged": 0.09
+        }[page_style]
+        
+        # Apply gradient with style-specific intensity
+        for i in range(gradient_steps):
+            # Create subtle variations in the gradient
+            variation = math.sin(i/gradient_steps * math.pi) * 2
+            r = 254 - int(i * gradient_intensity) - variation
+            g = 254 - int(i * gradient_intensity * 1.05) - variation
+            b = 253 - int(i * gradient_intensity * 1.1) - variation
+            
+            # Adjust for aged paper style
+            if page_style == "aged":
+                r = min(252, r + 3)  # More yellow/brown
+                g = min(250, g + 2)
+                b = min(240, b)      # Less blue
+                
+            self.set_fill_color(r, g, b)
+            y = i * (page_height / gradient_steps)
+            height = (page_height / gradient_steps) + 0.1
+            self.rect(0, y, page_width, height, 'F')
+        
+        # 4. Add paper texture dots based on style
+        dot_counts = {
+            "clean": random.randint(200, 500),
+            "light_dots": random.randint(1000, 2000),
+            "heavy_dots": random.randint(5000, 8000),
+            "lines_only": random.randint(300, 700),
+            "mixed": random.randint(2000, 3000),
+            "aged": random.randint(3000, 6000)
+        }[page_style]
+        
+        # Add the dots with style-specific parameters
+        for _ in range(dot_counts):
             x = random.uniform(0, page_width)
             y = random.uniform(0, page_height)
-            size = random.uniform(0.1, 0.3)  # Smaller dots
             
-            # Vary the darkness of dots
-            gray = random.randint(180, 220)
+            # Vary dot size based on style
+            size_min = {"clean": 0.02, "aged": 0.04}.get(page_style, 0.03)
+            size_max = {"heavy_dots": 0.18, "aged": 0.20}.get(page_style, 0.15)
+            size = random.uniform(size_min, size_max)
+            
+            # Create clusters for some styles
+            if page_style in ["heavy_dots", "aged", "mixed"] and random.random() > 0.93:
+                cluster_size = random.randint(3, 8)
+                base_x, base_y = x, y
+                for _ in range(cluster_size):
+                    cx = base_x + random.uniform(-1.2, 1.2)
+                    cy = base_y + random.uniform(-1.2, 1.2)
+                    if 0 <= cx < page_width and 0 <= cy < page_height:
+                        gray = random.randint(230, 248)
+                        dot_size = random.uniform(size_min, size_max)
+                        self.set_fill_color(gray, gray, gray)
+                        self.rect(cx, cy, dot_size, dot_size, 'F')
+            
+            # Regular dots with style-specific darkness
+            min_gray = {"clean": 240, "aged": 220}.get(page_style, 235)
+            max_gray = {"clean": 252, "aged": 240}.get(page_style, 250)
+            gray = random.randint(min_gray, max_gray)
             self.set_fill_color(gray, gray, gray)
             self.rect(x, y, size, size, 'F')
         
-        # 3. Add a few longer scanner lines (like artifacts)
-        for _ in range(10):
-            y_pos = random.uniform(0, page_height)
-            thickness = random.uniform(0.1, 0.3)  # Thinner lines
-            length = random.uniform(page_width * 0.3, page_width * 0.9)
-            x_pos = random.uniform(0, page_width - length)
-            
-            # Vary the darkness of lines
-            gray = random.randint(190, 220)
+        # 5. Add darker specks and "dust" - vary by style
+        speck_counts = {
+            "clean": random.randint(10, 30),
+            "light_dots": random.randint(30, 70),
+            "heavy_dots": random.randint(100, 200),
+            "lines_only": random.randint(20, 50),
+            "mixed": random.randint(50, 150),
+            "aged": random.randint(150, 250)
+        }[page_style]
+        
+        for _ in range(speck_counts):
+            x = random.uniform(0, page_width)
+            y = random.uniform(0, page_height)
+            size = random.uniform(0.04, 0.12)
+            gray = random.randint(170, 220)
             self.set_fill_color(gray, gray, gray)
-            self.rect(x_pos, y_pos, length, thickness, 'F')
+            self.rect(x, y, size, size, 'F')
         
-        # 4. Add fold marks or creases (vertical and horizontal)
-        # Horizontal fold
-        fold_y = random.uniform(page_height*0.4, page_height*0.6)
-        for x in range(0, int(page_width), 1):
-            # Slight variation in the fold line
-            y_variation = fold_y + random.uniform(-0.5, 0.5)
-            intensity = random.randint(180, 210)
-            self.set_fill_color(intensity, intensity, intensity)
-            self.rect(x, y_variation, 1, random.uniform(0.1, 0.4), 'F')
+        # 6. Add scan lines based on style
+        if page_style not in ["clean"]:  # Clean style has almost no scan lines
+            line_counts = {
+                "light_dots": random.randint(5, 15),
+                "heavy_dots": random.randint(10, 20),
+                "lines_only": random.randint(30, 50),
+                "mixed": random.randint(15, 25),
+                "aged": random.randint(15, 35)
+            }[page_style]
+            
+            for _ in range(line_counts):
+                y_pos = random.uniform(0, page_height)
+                thickness = random.uniform(0.05, 0.2)
+                
+                # Vary line opacity and length
+                opacity = random.uniform(230, 248)
+                if page_style == "lines_only":
+                    opacity = random.uniform(220, 240)  # More visible lines
+                    
+                length = random.uniform(page_width * 0.3, page_width * 0.95)
+                x_pos = random.uniform(0, page_width - length)
+                
+                # Add waviness and gaps to lines
+                segments = int(length / 5)
+                for s in range(segments):
+                    if random.random() > 0.2:  # 20% chance of a gap
+                        continue
+                    
+                    seg_length = length / segments
+                    seg_x = x_pos + (s * seg_length)
+                    waviness = 0.4 if page_style in ["lines_only", "aged"] else 0.2
+                    seg_y = y_pos + random.uniform(-waviness, waviness)
+                    self.set_fill_color(int(opacity), int(opacity), int(opacity))
+                    self.rect(seg_x, seg_y, seg_length, thickness, 'F')
         
-        # Vertical fold (less prominent)
-        if random.random() > 0.5:  # 50% chance of having a vertical fold
-            fold_x = random.uniform(page_width*0.3, page_width*0.7)
-            for y in range(0, int(page_height), 2):
-                x_variation = fold_x + random.uniform(-0.3, 0.3)
-                intensity = random.randint(190, 220)
+        # 7. Add paper fold/crease marks
+        # Only some page styles have visible fold marks
+        if page_style in ["mixed", "aged", "heavy_dots"] and random.random() > 0.3:
+            fold_y = page_height * random.uniform(0.4, 0.6)
+            for x in range(0, int(page_width), 1):
+                if random.random() > 0.8:  # Make fold line discontinuous
+                    continue
+                intensity = random.randint(198, 225)
                 self.set_fill_color(intensity, intensity, intensity)
-                self.rect(x_variation, y, random.uniform(0.1, 0.3), 1, 'F')
+                dot_height = random.uniform(0.08, 0.25)
+                y_variation = fold_y + random.uniform(-0.4, 0.4) * (1 + math.sin(x/20)**2)
+                self.rect(x, y_variation, 0.5, dot_height, 'F')
         
-        # 5. Darker edges (like shadow from scanner)
-        edge_width = 15
+        # 8. Add occasional vertical fold for some styles
+        if page_style in ["mixed", "aged"] and random.random() > 0.6:
+            fold_x = page_width * random.uniform(0.25, 0.75)
+            for y in range(0, int(page_height), 2):
+                if random.random() > 0.8:  # Make fold line discontinuous
+                    continue
+                intensity = random.randint(205, 230)
+                self.set_fill_color(intensity, intensity, intensity)
+                dot_width = random.uniform(0.08, 0.15)
+                x_variation = fold_x + random.uniform(-0.25, 0.25) * (1 + math.sin(y/30)**2)
+                self.rect(x_variation, y, dot_width, 0.4, 'F')
+        
+        # 9. Add paper fiber effects (but not for clean style)
+        if page_style != "clean":
+            fiber_counts = {
+                "light_dots": random.randint(20, 40),
+                "heavy_dots": random.randint(40, 70),
+                "lines_only": random.randint(30, 50),
+                "mixed": random.randint(40, 60),
+                "aged": random.randint(50, 80)
+            }[page_style]
+            
+            for _ in range(fiber_counts):
+                x = random.uniform(10, page_width-10)
+                y = random.uniform(10, page_height-10)
+                length = random.uniform(0.5, 3.0)
+                angle = random.uniform(0, math.pi*2)
+                dx = length * math.cos(angle)
+                dy = length * math.sin(angle)
+                gray = random.randint(220, 245)
+                self.set_fill_color(gray, gray, gray)
+                self.set_line_width(0.1)
+                self.line(x, y, x+dx, y+dy)
+        
+        # 10. Always add some edge shadows, but vary intensity by style
+        edge_width = {
+            "clean": 8,
+            "light_dots": 10,
+            "heavy_dots": 12,
+            "lines_only": 10,
+            "mixed": 12,
+            "aged": 15
+        }[page_style]
+        
         for i in range(edge_width):
-            # Left edge shadow
-            shadow = 220 - int((edge_width - i) * 1.5)  # Darker at the edge
+            # Create a more natural edge darkness gradient
+            shadow_intensity = {
+                "clean": 0.8,
+                "light_dots": 1.0,
+                "heavy_dots": 1.2,
+                "lines_only": 1.0,
+                "mixed": 1.2,
+                "aged": 1.4
+            }[page_style]
+            
+            shadow = 255 - int((edge_width - i)**shadow_intensity)
             self.set_fill_color(shadow, shadow, shadow)
-            self.rect(i*0.5, 0, 0.5, page_height, 'F')
             
-            # Right edge shadow
-            self.rect(page_width - (i*0.5) - 0.5, 0, 0.5, page_height, 'F')
+            # Left and right edges
+            self.rect(i*0.3, 0, 0.3, page_height, 'F')
+            self.rect(page_width - (i*0.3) - 0.3, 0, 0.3, page_height, 'F')
             
-            # Top edge shadow
-            self.rect(0, i*0.5, page_width, 0.5, 'F')
-            
-            # Bottom edge shadow
-            self.rect(0, page_height - (i*0.5) - 0.5, page_width, 0.5, 'F')
+            # Top and bottom edges (partial)
+            if i < edge_width * 0.6:
+                self.rect(0, i*0.3, page_width, 0.3, 'F')
+                self.rect(0, page_height - (i*0.3) - 0.3, page_width, 0.3, 'F')
         
-        # Reset fill color
+        # Reset colors
         self.set_fill_color(255, 255, 255)
+        self.set_draw_color(0, 0, 0)
         
-        # Make text darker by setting text color to deep black
+        # Ensure deep black text for best contrast
         self.set_text_color(0, 0, 0)
+
+    # Override the write_html method to use darker text
+    def write_html(self, *args, **kwargs):
+        # Save current text color
+        current_r, current_g, current_b = self.text_color
+        # Set to pure black text for better contrast
+        self.set_text_color(0, 0, 0)
+        # Call parent method
+        super().write_html(*args, **kwargs)
+        # Restore original text color
+        self.set_text_color(current_r, current_g, current_b)
 
 def initialize_pdf_with_font(pdf_class, target_pages):
     """Initialize PDF with proper font handling"""
@@ -558,7 +723,7 @@ def create_typed_pdf(title, content):
                     pdf.multi_cell(pdf.w - 28, 7, line)
                     first_line = False
                 else:
-                    pdf.set_x(18)
+                    pdf.set_x(18)  # Indent continued lines
                     pdf.multi_cell(pdf.w - 28, 7, line)
                 line = word
         
