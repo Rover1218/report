@@ -135,10 +135,10 @@ def generate_report(topic, num_pages, is_handwritten=False):
     """
     # Configure the model - use Gemini 1.5 Flash 8B model with proper limits
     model = genai.GenerativeModel(
-        'models/gemini-1.5-flash-8b',  # Updated to the specified model
+        'gemini-1.5-flash',
         generation_config={
-            'temperature': 1,  # Reduced for more consistent, clean output
-            'max_output_tokens': min(8192, num_pages * 1500)  # Adjusted to model's 8,192 token limit
+            'temperature': 1,
+            'max_output_tokens': min(8192, num_pages * 1500)
         }
     )
     
@@ -335,7 +335,10 @@ def generate_report(topic, num_pages, is_handwritten=False):
         
     except Exception as e:
         print(f"Error generating or parsing content: {str(e)}")
-        print(f"Raw content preview: {raw_content[:200]}...")
+        if 'raw_content' in locals():
+            print(f"Raw content preview: {raw_content[:200]}...")
+        else:
+            print("No raw content available due to API error")
         
         # Create a more robust fallback report
         fallback_report = {

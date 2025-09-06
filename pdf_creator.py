@@ -104,6 +104,19 @@ class PageLimitPDF(PDF):
 
 class HandwrittenPDF(PDF):
     """Custom PDF class that handles text wrapping and rotation"""
+    def __init__(self, target_pages=None):
+        super().__init__(target_pages)
+        # Initialize handwriting characteristics for consistency
+        self.writing_style = {
+            'base_slant': random.uniform(-3, 3),
+            'pressure_variation': random.uniform(0.7, 1.3),
+            'speed_variation': random.uniform(0.8, 1.2),
+            'fatigue_factor': random.uniform(0.02, 0.05),
+            'dominant_hand': random.choice(['right', 'left'])
+        }
+        self.word_count = 0
+        self.line_count = 0
+    
     def rotated_text(self, x, y, text, angle, size_factor=1.0):
         if not text or text.isspace():
             return
@@ -115,48 +128,85 @@ class HandwrittenPDF(PDF):
         x = max(safe_margin, x)
         y = max(safe_margin, y)
 
-        angle_rad = (angle * 0.3) * math.pi / 180  # Slightly reduce overall angle
+        # Apply minimal fatigue effect - handwriting gets slightly messier over time
+        fatigue_effect = 1 + (self.word_count * self.writing_style['fatigue_factor'] * 0.1)
+        
+        # Base angle with personal slant
+        base_angle = self.writing_style['base_slant'] + (angle * 0.2)
+        angle_rad = base_angle * math.pi / 180
+        
         current_x = x
         current_y = y
+        
+        # Add slight baseline drift for entire word
+        baseline_drift = random.uniform(-0.8, 0.8) * fatigue_effect
 
         for i, char in enumerate(text):
             if char == ' ':
-                # Uneven spacing
-                space_w = self.get_string_width(' ') * random.uniform(0.8, 1.3)
+                # More realistic spacing variation
+                space_w = self.get_string_width(' ') * random.uniform(0.7, 1.4) * self.writing_style['speed_variation']
                 current_x += space_w
                 continue
 
-            # Random letter size
-            char_size_factor = random.uniform(0.85, 1.15)
+            # Character-specific variations with fatigue
+            char_size_factor = random.uniform(0.8, 1.2) * (1 + fatigue_effect * 0.1)
             self.set_font_size(current_size * char_size_factor)
 
-            # Random offset
-            x_offset = random.uniform(-0.3, 0.3)
-            y_offset = random.uniform(-0.5, 0.5)
+            # More realistic positioning with hand dominance effect
+            hand_bias = 0.2 if self.writing_style['dominant_hand'] == 'right' else -0.2
+            x_offset = random.uniform(-0.6, 0.6) + hand_bias * fatigue_effect
+            y_offset = random.uniform(-0.8, 0.8) + baseline_drift
 
-            # Slightly vary angle per character
-            char_angle = angle_rad + random.uniform(-2, 2) * math.pi / 180
+            # Character angle with micro-tremor
+            char_angle = angle_rad + random.uniform(-4, 4) * math.pi / 180 * fatigue_effect
+            
+            # Keep text consistently dark and readable
+            ink_intensity = random.randint(0, 30)  # Always dark text
+            self.set_text_color(ink_intensity, ink_intensity, ink_intensity)
 
-            # Occasional brush cut
-            if random.random() < 0.05:
-                self.set_draw_color(255, 255, 255)
-                cut_x = current_x + random.uniform(0, self.get_string_width(char))
-                cut_y = current_y + random.uniform(-1, 1)
-                self.rotate(random.uniform(0, math.pi), cut_x, cut_y)
-                self.line(cut_x, cut_y, cut_x + random.uniform(0.5, 1.5), cut_y)
-                self.rotate(0)
-                self.set_draw_color(0, 0, 0)
+            # Occasional ink blots or skips
+            if random.random() < 0.03 * fatigue_effect:
+                # Ink blot
+                blob_size = random.uniform(0.3, 0.8)
+                self.set_fill_color(ink_intensity, ink_intensity, ink_intensity)
+                self.circle(current_x + x_offset, current_y + y_offset, blob_size, 'F')
+            elif random.random() < 0.02:
+                # Ink skip - make character lighter
+                skip_intensity = min(255, ink_intensity + random.randint(40, 80))
+                self.set_text_color(skip_intensity, skip_intensity, skip_intensity)
 
-            # Draw character
+            # Letter connection strokes (cursive-like)
+            if i > 0 and random.random() < 0.3 and text[i-1] != ' ':
+                prev_x = current_x - self.get_string_width(text[i-1]) * 0.8
+                stroke_y = current_y + random.uniform(-0.3, 0.3)
+                self.set_draw_color(ink_intensity + 20, ink_intensity + 20, ink_intensity + 20)
+                self.set_line_width(0.1)
+                self.line(prev_x, stroke_y, current_x + x_offset - 0.5, current_y + y_offset)
+
+            # Draw character with rotation
             self.rotate(char_angle, current_x + x_offset, current_y + y_offset)
             self.text(current_x + x_offset, current_y + y_offset, char)
             self.rotate(0)
 
-            # Move x for next character
-            char_width = self.get_string_width(char)
-            current_x += char_width * random.uniform(0.9, 1.1)
+            # Character width with natural variation
+            char_width = self.get_string_width(char) * random.uniform(0.85, 1.15)
+            current_x += char_width
+            
+            # Reset text color
+            self.set_text_color(0, 0, 0)
 
+        self.word_count += len(text.split())
         self.set_font_size(self.font_size / size_factor)
+    
+    def circle(self, x, y, radius, style=''):
+        """Draw a circle approximation using small rectangles"""
+        segments = max(8, int(radius * 4))  # More segments for larger circles
+        for i in range(segments):
+            angle = (i / segments) * 2 * math.pi
+            px = x + radius * math.cos(angle)
+            py = y + radius * math.sin(angle)
+            size = max(0.1, radius / 4)
+            self.rect(px - size/2, py - size/2, size, size, style)
     
     def add_page(self, orientation='', format='', same=False):
         # Override add_page to add scanned paper effect to each page
@@ -266,58 +316,114 @@ class HandwrittenPDF(PDF):
             self.set_fill_color(gray, gray, gray)
             self.rect(x, y, size, size, 'F')
         
-        # 5. Add darker specks and "dust" - vary by style
-        speck_counts = {
-            "clean": random.randint(10, 30),
-            "light_dots": random.randint(30, 70),
-            "heavy_dots": random.randint(100, 200),
-            "lines_only": random.randint(20, 50),
-            "mixed": random.randint(50, 150),
-            "aged": random.randint(150, 250)
-        }[page_style]
+        # 5. Add realistic dust and scanning artifacts
+        speck_params = {
+            "clean": {"count": random.randint(8, 25), "darkness": (190, 230)},
+            "light_texture": {"count": random.randint(25, 60), "darkness": (180, 220)},
+            "medium_wear": {"count": random.randint(80, 150), "darkness": (170, 210)},
+            "heavy_use": {"count": random.randint(150, 250), "darkness": (160, 200)},
+            "aged_paper": {"count": random.randint(200, 300), "darkness": (150, 190)},
+            "notebook_style": {"count": random.randint(40, 80), "darkness": (185, 225)}
+        }
         
-        for _ in range(speck_counts):
+        params = speck_params.get(page_style, speck_params["light_texture"])
+        speck_count = params["count"]
+        dark_min, dark_max = params["darkness"]
+        
+        for _ in range(speck_count):
             x = random.uniform(0, page_width)
             y = random.uniform(0, page_height)
-            size = random.uniform(0.04, 0.12)
-            gray = random.randint(170, 220)
-            self.set_fill_color(gray, gray, gray)
-            self.rect(x, y, size, size, 'F')
-        
-        # 6. Add scan lines based on style
-        if page_style not in ["clean"]:  # Clean style has almost no scan lines
-            line_counts = {
-                "light_dots": random.randint(5, 15),
-                "heavy_dots": random.randint(10, 20),
-                "lines_only": random.randint(30, 50),
-                "mixed": random.randint(15, 25),
-                "aged": random.randint(15, 35)
-            }[page_style]
             
-            for _ in range(line_counts):
-                y_pos = random.uniform(0, page_height)
-                thickness = random.uniform(0.05, 0.2)
-                
-                # Vary line opacity and length
-                opacity = random.uniform(230, 248)
-                if page_style == "lines_only":
-                    opacity = random.uniform(220, 240)  # More visible lines
+            # Vary speck types for realism
+            speck_type = random.choice(["dust", "fiber", "ink_spot", "scan_artifact"])
+            
+            if speck_type == "dust":
+                size = random.uniform(0.03, 0.08)
+                gray = random.randint(dark_min, dark_max)
+                self.set_fill_color(gray, gray, gray)
+                self.rect(x, y, size, size, 'F')
+            
+            elif speck_type == "fiber":
+                length = random.uniform(0.5, 2.0)
+                angle = random.uniform(0, math.pi * 2)
+                gray = random.randint(dark_min + 10, dark_max)
+                self.set_draw_color(gray, gray, gray)
+                self.set_line_width(0.05)
+                dx = length * math.cos(angle)
+                dy = length * math.sin(angle)
+                self.line(x, y, x + dx, y + dy)
+            
+            elif speck_type == "ink_spot":
+                size = random.uniform(0.08, 0.15)
+                gray = random.randint(dark_min - 20, dark_min + 10)
+                self.set_fill_color(gray, gray, gray)
+                # Irregular ink spot
+                for _ in range(3):
+                    offset_x = random.uniform(-size/2, size/2)
+                    offset_y = random.uniform(-size/2, size/2)
+                    spot_size = size * random.uniform(0.6, 1.0)
+                    self.rect(x + offset_x, y + offset_y, spot_size, spot_size, 'F')
+            
+            else:  # scan_artifact
+                # Horizontal scan line artifact
+                width = random.uniform(2, 8)
+                height = random.uniform(0.1, 0.3)
+                gray = random.randint(dark_min + 20, dark_max)
+                self.set_fill_color(gray, gray, gray)
+                self.rect(x, y, width, height, 'F')
+        
+        # 6. Add realistic scanning lines and artifacts
+        if page_style != "clean":
+            scan_line_params = {
+                "light_texture": {"count": random.randint(3, 12), "visibility": (235, 248)},
+                "medium_wear": {"count": random.randint(8, 18), "visibility": (225, 240)},
+                "heavy_use": {"count": random.randint(15, 30), "visibility": (215, 235)},
+                "aged_paper": {"count": random.randint(12, 25), "visibility": (210, 230)},
+                "notebook_style": {"count": random.randint(5, 15), "visibility": (230, 245)}
+            }
+            
+            params = scan_line_params.get(page_style, {"count": 10, "visibility": (230, 245)})
+            line_count = params["count"]
+            opacity_min, opacity_max = params["visibility"]
+            
+            for _ in range(line_count):
+                # Horizontal scan lines (most common)
+                if random.random() < 0.8:
+                    y_pos = random.uniform(0, page_height)
+                    thickness = random.uniform(0.08, 0.25)
+                    opacity = random.randint(opacity_min, opacity_max)
                     
-                length = random.uniform(page_width * 0.3, page_width * 0.95)
-                x_pos = random.uniform(0, page_width - length)
-                
-                # Add waviness and gaps to lines
-                segments = int(length / 5)
-                for s in range(segments):
-                    if random.random() > 0.2:  # 20% chance of a gap
-                        continue
+                    # Line length varies
+                    length = random.uniform(page_width * 0.4, page_width * 0.98)
+                    x_start = random.uniform(0, page_width - length)
                     
-                    seg_length = length / segments
-                    seg_x = x_pos + (s * seg_length)
-                    waviness = 0.4 if page_style in ["lines_only", "aged"] else 0.2
-                    seg_y = y_pos + random.uniform(-waviness, waviness)
-                    self.set_fill_color(int(opacity), int(opacity), int(opacity))
-                    self.rect(seg_x, seg_y, seg_length, thickness, 'F')
+                    # Create realistic segmented line
+                    segments = max(1, int(length / 8))
+                    for s in range(segments):
+                        # Random gaps in scan lines
+                        if random.random() < 0.15:
+                            continue
+                        
+                        seg_length = (length / segments) * random.uniform(0.8, 1.2)
+                        seg_x = x_start + (s * length / segments)
+                        
+                        # Slight vertical waviness
+                        wave_y = y_pos + random.uniform(-0.3, 0.3)
+                        
+                        self.set_fill_color(opacity, opacity, opacity)
+                        self.rect(seg_x, wave_y, seg_length, thickness, 'F')
+                
+                # Occasional vertical artifacts
+                else:
+                    x_pos = random.uniform(0, page_width)
+                    thickness = random.uniform(0.05, 0.15)
+                    opacity = random.randint(opacity_min + 5, opacity_max)
+                    
+                    height = random.uniform(page_height * 0.1, page_height * 0.6)
+                    y_start = random.uniform(0, page_height - height)
+                    
+                    self.set_fill_color(opacity, opacity, opacity)
+                    self.rect(x_pos, y_start, thickness, height, 'F')
         
         # 7. Add paper fold/crease marks
         # Only some page styles have visible fold marks
@@ -1010,63 +1116,135 @@ def create_handwritten_pdf(title, content):
         content_text = re.sub(r'\\n\\n', ' ', content_text)
         content_text = re.sub(r'\\n', ' ', content_text)
         
-        # Instead of multi_cell, add characters with random offsets
-        lines = content_text.split('\n') if '\n' in content_text else [content_text]
-
+        # Realistic handwritten text with natural flow
+        words = content_text.split()
         left_margin = 15
         right_margin = pdf.w - 15
-
-        for line in lines:
-            x_start = pdf.get_x()
-            y_start = pdf.get_y()
-            current_x = x_start
-            current_y = y_start
-
-            for ch in line:
-                if ch == ' ':
-                    # Random space width
-                    space_width = pdf.get_string_width(' ') * random.uniform(0.8, 1.3)
-                    current_x += space_width
-                    continue
-
-                # Random character size
-                base_size = 14
-                char_size = base_size * random.uniform(0.85, 1.15)
-                pdf.set_font_size(char_size)
-
-                # Occasional brush cut
-                if random.random() < 0.05:
-                    pdf.set_draw_color(255, 255, 255)
-                    cut_x = current_x + random.uniform(0, pdf.get_string_width(ch))
-                    cut_y = current_y + random.uniform(-1, 1)
-                    angle = random.uniform(0, 180)
-                    pdf.rotate(angle, cut_x, cut_y)
-                    pdf.line(cut_x, cut_y, cut_x + random.uniform(0.5, 1.5), cut_y)
-                    pdf.rotate(0)
+        line_height = 18
+        
+        current_x = left_margin
+        current_y = pdf.get_y()
+        
+        # Add margin lines (like notebook paper)
+        if random.random() < 0.7:  # 70% chance of margin line
+            pdf.set_draw_color(200, 200, 255)  # Light blue
+            pdf.set_line_width(0.2)
+            margin_x = left_margin + random.uniform(15, 25)
+            pdf.line(margin_x, current_y - 5, margin_x, current_y + len(words) * 2)
+            pdf.set_draw_color(0, 0, 0)
+        
+        for word_idx, word in enumerate(words):
+            # Check if word fits on current line
+            word_width = pdf.get_string_width(word + ' ') * 1.2  # Estimate with spacing
+            
+            if current_x + word_width > right_margin and current_x > left_margin:
+                # Move to next line with natural variation
+                current_x = left_margin + random.uniform(-2, 8)  # Slight indent variation
+                current_y += line_height + random.uniform(-2, 3)  # Line spacing variation
+                pdf.line_count += 1
+                
+                # Occasional ruled line (like notebook paper)
+                if random.random() < 0.4:
+                    pdf.set_draw_color(220, 220, 240)
+                    pdf.set_line_width(0.1)
+                    line_y = current_y + 2
+                    pdf.line(left_margin, line_y, right_margin, line_y)
                     pdf.set_draw_color(0, 0, 0)
-
-                # Random angle and position offset
-                angle = random.uniform(-2, 2)
-                x_offset = random.uniform(-0.5, 0.5)
-                y_offset = random.uniform(-0.5, 0.5)
-                pdf.rotate(angle, current_x + x_offset, current_y + y_offset)
-                pdf.text(current_x + x_offset, current_y + y_offset, ch)
+            
+            # Word-level characteristics
+            word_fatigue = 1 + (pdf.word_count * 0.002)
+            word_speed = pdf.writing_style['speed_variation'] * random.uniform(0.9, 1.1)
+            word_pressure = pdf.writing_style['pressure_variation'] * random.uniform(0.8, 1.2)
+            
+            # Some words are written faster/slower affecting spacing and angle
+            if len(word) > 6:  # Longer words often written faster
+                word_speed *= 1.2
+                word_pressure *= 0.9
+            
+            # Add word with character-by-character variation
+            word_start_x = current_x
+            for char_idx, char in enumerate(word):
+                # Character size with fatigue and word-level effects
+                base_size = 14
+                char_size = base_size * random.uniform(0.75, 1.25) * word_fatigue
+                
+                # First and last letters often slightly larger (emphasis)
+                if char_idx == 0 or char_idx == len(word) - 1:
+                    char_size *= random.uniform(1.05, 1.15)
+                
+                pdf.set_font_size(char_size)
+                
+                # Always use dark text for readability
+                ink_darkness = random.randint(0, 25)  # Always very dark
+                
+                # Occasional ink buildup at word start - keep readable
+                if char_idx == 0 and random.random() < 0.1:
+                    ink_darkness = max(40, ink_darkness - random.randint(10, 20))
+                
+                pdf.set_text_color(ink_darkness, ink_darkness, ink_darkness)
+                
+                # Position with natural hand movement and word flow
+                x_jitter = random.uniform(-0.5, 0.5) / word_speed
+                y_jitter = random.uniform(-0.8, 0.8) / word_speed
+                
+                # Progressive baseline drift within word
+                baseline_drift = (char_idx / len(word)) * random.uniform(-0.3, 0.3)
+                y_jitter += baseline_drift
+                
+                # Angle variation with word consistency
+                base_slant = pdf.writing_style['base_slant']
+                word_slant_variation = random.uniform(-1, 1)  # Consistent for whole word
+                char_angle = base_slant + word_slant_variation + random.uniform(-2, 2)
+                
+                # Speed affects angle stability
+                if word_speed > 1.1:  # Fast writing is less stable
+                    char_angle += random.uniform(-2, 2)
+                
+                # Draw character
+                char_x = current_x + x_jitter
+                char_y = current_y + y_jitter
+                pdf.rotate(char_angle * math.pi / 180, char_x, char_y)
+                pdf.text(char_x, char_y, char)
                 pdf.rotate(0)
-
-                char_width = pdf.get_string_width(ch)
-                current_x += char_width * random.uniform(0.9, 1.1)
-
-                if current_x + x_offset + char_width > right_margin:
-                    current_x = left_margin
-                    current_y += 8  # line spacing
-                    pdf.set_y(current_y)
-                    pdf.set_x(current_x)
-
-                if current_x < left_margin:
-                    current_x = left_margin
-
-            pdf.set_y(current_y + 10)
-            pdf.set_x(x_start)
+                
+                # Advance position with speed-affected spacing
+                char_width = pdf.get_string_width(char) * random.uniform(0.85, 1.15) / word_speed
+                current_x += char_width
+                
+                # Letter connections (more common in cursive-style writing)
+                connection_chance = 0.3 if pdf.writing_style['speed_variation'] > 1.0 else 0.15
+                if char_idx < len(word) - 1 and random.random() < connection_chance:
+                    next_x = current_x + random.uniform(0.3, 1.0)
+                    connection_y = char_y + random.uniform(-0.3, 0.8)
+                    
+                    # Connection stroke color slightly lighter
+                    stroke_color = min(255, ink_darkness + 25)
+                    pdf.set_draw_color(stroke_color, stroke_color, stroke_color)
+                    pdf.set_line_width(random.uniform(0.05, 0.12))
+                    
+                    # Curved connection
+                    mid_x = (char_x + char_width * 0.8 + next_x) / 2
+                    mid_y = connection_y + random.uniform(-0.2, 0.2)
+                    
+                    # Simple curve approximation with two line segments
+                    pdf.line(char_x + char_width * 0.8, char_y + 0.5, mid_x, mid_y)
+                    pdf.line(mid_x, mid_y, next_x - 0.3, connection_y)
+                    
+                    pdf.set_draw_color(0, 0, 0)
+            
+            # Add space after word
+            space_width = pdf.get_string_width(' ') * random.uniform(0.8, 1.4)
+            current_x += space_width
+            
+            # Occasional ink smudge or correction
+            if random.random() < 0.01:
+                smudge_x = word_start_x + random.uniform(0, current_x - word_start_x)
+                smudge_y = current_y + random.uniform(-1, 2)
+                pdf.set_fill_color(180, 180, 180)
+                pdf.ellipse(smudge_x, smudge_y, random.uniform(2, 4), random.uniform(0.5, 1.5), 'F')
+        
+        pdf.set_y(current_y + line_height * 2)
+        pdf.set_text_color(0, 0, 0)  # Reset color
 
     # Introduction
     intro_words = intro_text.split()
